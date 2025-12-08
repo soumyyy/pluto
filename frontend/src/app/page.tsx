@@ -17,8 +17,8 @@ type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   sources?: Source[];
-  thoughts?: string[];
   webSearchUsed?: boolean;
+  isPlaceholder?: boolean;
 };
 
 export default function ChatPage() {
@@ -36,7 +36,18 @@ export default function ChatPage() {
       content: input.trim()
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const placeholderId = crypto.randomUUID();
+    const expectsWeb = shouldSuggestWebSearch(userMessage.content);
+    const placeholderMessage: ChatMessage = {
+      id: placeholderId,
+      role: 'assistant',
+      content: 'Pluto is thinking…',
+      sources: [],
+      isPlaceholder: true,
+      webSearchUsed: expectsWeb
+    };
+
+    setMessages((prev) => [...prev, userMessage, placeholderMessage]);
     setInput('');
     setIsSending(true);
 
@@ -46,23 +57,28 @@ export default function ChatPage() {
       });
 
       const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: placeholderId,
         role: 'assistant',
         content: response.reply ?? 'Pluto is thinking...',
         sources: response.sources ?? [],
-        thoughts: response.thoughts ?? [],
-        webSearchUsed: response.web_search_used ?? false
+        webSearchUsed: response.web_search_used ?? false,
+        isPlaceholder: false
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) =>
+        prev.map((message) => (message.id === placeholderId ? assistantMessage : message))
+      );
     } catch (error) {
       console.error('Failed to send chat', error);
       const errorMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: placeholderId,
         role: 'assistant',
-        content: 'Sorry, something went wrong talking to Pluto.'
+        content: 'Sorry, something went wrong talking to Pluto.',
+        isPlaceholder: false
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) =>
+        prev.map((message) => (message.id === placeholderId ? errorMessage : message))
+      );
     } finally {
       setIsSending(false);
     }
@@ -84,8 +100,8 @@ export default function ChatPage() {
                 role={message.role}
                 content={message.content}
                 sources={message.sources}
-                thoughts={message.thoughts}
                 webSearchUsed={message.webSearchUsed}
+                isPlaceholder={message.isPlaceholder}
               />
             ))
           )}
@@ -105,4 +121,37 @@ export default function ChatPage() {
       </>
     </ChatLayout>
   );
+}
+
+function shouldSuggestWebSearch(message: string): boolean {
+  const lowered = message.toLowerCase();
+  const triggerTokens = [
+    'news',
+    'latest',
+    'current',
+    'today',
+    'who is',
+    'what is',
+    'research',
+    'search',
+    'find',
+    'report',
+    'update',
+    'movie',
+    'film',
+    'show',
+    'release',
+    'box office',
+    'actor',
+    'actress',
+    'music',
+    'stock',
+    'price',
+    'review'
+  ];
+
+  if (message.includes('?') || message.split(' ').length > 15) {
+    return true;
+  }
+  return triggerTokens.some((token) => lowered.includes(token));
 }

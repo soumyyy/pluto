@@ -1,125 +1,173 @@
-from typing import List, Optional, TYPE_CHECKING, Any
+import json
 import logging
+import re
+from typing import List, Optional
+
+from langchain.agents import AgentExecutor, create_openai_functions_agent
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.tools import Tool
 
 from ..config import get_settings
 from ..models.schemas import ChatResponse, SearchSource
-from ..tools import search_memories_tool, web_search_tool
+from ..tools import (
+    search_memories_tool,
+    web_search_tool,
+)
 
-if TYPE_CHECKING:  # pragma: no cover - type hints only
-    from langchain.schema import BaseMessage
-    from langchain_openai import ChatOpenAI
-else:
-    BaseMessage = Any
-    ChatOpenAI = Any
-
-SYSTEM_PROMPT = """You are Pluto, a personal agent for a single user. You know about the user from past conversations and, soon, from their email. Your job is to help summarize information, extract tasks, and keep track of what matters to them. Use memories when helpful, incorporate verified web intelligence when responding about current events, and be concise and clear."""
 logger = logging.getLogger(__name__)
 
+SYSTEM_PROMPT = """You are Pluto, a personal agent for a single user. You know about the user from past conversations and, soon, from their email. Your job is to help summarize information, extract tasks, and keep track of what matters to them. Use memories when helpful, call the web_search tool whenever you need up-to-date facts or entertainment news. If the user references anything that may have changed after 2024 (news, entertainment, finance, product releases, etc.), you MUST call web_search before answering.
 
-async def _build_context(user_id: str, message: str) -> tuple[str, List[str]]:
-    used_tools: List[str] = []
-    memories = await search_memories_tool(user_id=user_id, query=message)
-    memory_text = "".join(f"- {m.content}\n" for m in memories)
-    if memory_text:
-        used_tools.append("search_memories")
-    return memory_text, used_tools
+Formatting rules:
+- Do NOT embed raw URLs or inline citations inside your main response. Rely on the UI to show sources separately.
+- When referencing outside data, mention the publication/source name in plain text (e.g., "According to Indian Express..."), but leave actual links for the UI to display.
+- Be verbose when explaining reasoning or listing numeric details so the user gets a useful summary."""
 
 
-async def _load_llm(settings) -> Optional["ChatOpenAI"]:
+async def _load_llm():
+    from langchain_openai import ChatOpenAI
+
+    settings = get_settings()
     if not (settings.enable_openai and settings.openai_api_key):
-        return None
-    try:
-        from langchain_openai import ChatOpenAI  # type: ignore
-    except Exception as exc:  # pragma: no cover - defensive guard
-        logger.warning("Failed to import langchain_openai; falling back to stubbed replies: %s", exc)
         return None
 
     return ChatOpenAI(
         api_key=settings.openai_api_key,
-        temperature=0.3,
+        temperature=0.35,
         model_name="gpt-4o-mini",
-        max_tokens=700
+        max_tokens=800
     )
 
 
-def _fallback_reply(user_message: str, memory_context: str, web_context: str) -> str:
-    base = "Pluto stubbed reply: "
-    memory_note = f"I noted these memories -> {memory_context.strip()} | " if memory_context else ""
-    web_note = f"Web intel -> {web_context.strip()} | " if web_context else ""
-    return f"{base}{memory_note}{web_note}You said: {user_message}"
+async def _memory_tool_output(user_id: str, query: str) -> str:
+    memories = await search_memories_tool(user_id=user_id, query=query)
+    if not memories:
+        return "No stored memories matched."
+    return "\n".join(f"- {m.content}" for m in memories)
 
 
-def _should_search_web(message: str) -> bool:
-    lowered = message.lower()
-    trigger_tokens = (
-        "news", "latest", "current", "today", "who is", "what is", "research", "search",
-        "find", "report", "update", "movie", "film", "show", "episode", "release",
-        "box office", "actor", "actress", "music", "song", "stock", "price", "review"
-    )
-    if "?" in message or len(message.split()) > 15:
-        return True
-    return any(token in lowered for token in trigger_tokens)
+async def _web_tool_output(query: str) -> str:
+    summary, sources = await web_search_tool(query)
+    payload = {
+        "summary": summary,
+        "sources": [source.dict() for source in sources],
+    }
+    return json.dumps(payload)
 
 
-async def _maybe_run_web_search(message: str) -> tuple[str, List[SearchSource], bool]:
-    if not _should_search_web(message):
-        return "", [], False
-    web_context, sources = await web_search_tool(message)
-    used = bool(web_context or sources)
-    return web_context, sources, used
+def _build_tools(user_id: str) -> List[Tool]:
+    async def memory_coro(q: str) -> str:
+        return await _memory_tool_output(user_id, q)
+
+    async def web_coro(q: str) -> str:
+        return await _web_tool_output(q)
+
+    return [
+        Tool(
+            name="memory_lookup",
+            func=lambda q: "Memory lookup available only in async mode.",
+            coroutine=memory_coro,
+            description="Retrieve relevant long-term memories about the user."
+        ),
+        Tool(
+            name="web_search",
+            func=lambda q: "Web search available only in async mode.",
+            coroutine=web_coro,
+            description="Fetch recent information from the internet when the user asks about current events, entertainment news, or unknown facts."
+        ),
+    ]
 
 
 async def run_chat_agent(user_id: str, conversation_id: str, message: str) -> ChatResponse:
     _ = conversation_id  # TODO: fetch conversation history for better context.
-    settings = get_settings()
-    context, used_tools = await _build_context(user_id=user_id, message=message)
-    thoughts: List[str] = []
-    if context:
-        thoughts.append("Referenced stored memories for background context.")
+    llm = await _load_llm()
+    if not llm:
+        return ChatResponse(
+            reply="Pluto cannot reach the LLM right now. Check OPENAI_API_KEY/BRAIN_ENABLE_OPENAI.",
+            used_tools=[],
+            sources=[],
+            web_search_used=False
+        )
 
-    web_context, sources, searched = await _maybe_run_web_search(message)
-    if searched:
-        used_tools.append("web_search")
-        if sources:
-            thoughts.append(f"Consulted Tavily search ({len(sources)} sources).")
-        elif web_context:
-            thoughts.append("Attempted web search, but no sources were returned.")
-
-    llm = await _load_llm(settings)
-    if llm:
-        reply_text = await _generate_with_llm(llm, context, web_context, message)
-    else:
-        reply_text = _fallback_reply(message, context, web_context)
-
-    return ChatResponse(
-        reply=reply_text,
-        used_tools=used_tools,
-        sources=sources,
-        thoughts=thoughts,
-        web_search_used=searched
-    )
-
-
-async def _generate_with_llm(llm: "ChatOpenAI", memory_context: str, web_context: str, message: str) -> str:
-    try:
-        from langchain.prompts import ChatPromptTemplate  # type: ignore
-    except Exception as exc:  # pragma: no cover - defensive guard
-        logger.warning("LangChain prompt import failed, using fallback: %s", exc)
-        return _fallback_reply(message, memory_context, web_context)
-
+    tools = _build_tools(user_id)
     prompt = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),
-        (
-            "human",
-            "Context from memories:\n{memory_context}\n\nWeb intelligence:\n{web_context}\n\nUser message:\n{user_message}"
-        )
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ("human", "{input}")
     ])
 
-    formatted_messages: List[BaseMessage] = prompt.format_messages(
-        memory_context=memory_context or "(no memories yet)",
-        web_context=web_context or "(no web data fetched)",
-        user_message=message
+    agent = create_openai_functions_agent(llm, tools, prompt)
+    executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
+
+    result = await executor.ainvoke({"input": message})
+    raw_reply = result.get("output", "")
+
+    tool_calls = result.get("intermediate_steps", [])
+    used_tools: List[str] = []
+    sources: List[SearchSource] = []
+    web_used = False
+
+    for action, action_result in tool_calls:
+        tool_name = getattr(action, "tool", None) or getattr(action, "tool_name", "")
+        tool_input = getattr(action, "tool_input", "")
+        if tool_name:
+            used_tools.append(tool_name)
+
+        if tool_name == "web_search" and isinstance(action_result, str):
+            web_used = True
+            try:
+                payload = json.loads(action_result)
+            except json.JSONDecodeError:
+                # thoughts.append(action_result[:200])
+                continue
+
+            summary = payload.get("summary", "")
+            raw_sources = payload.get("sources", [])
+            for entry in raw_sources:
+                try:
+                    src = SearchSource(**entry)
+                except Exception:  # pragma: no cover - malformed entry
+                    continue
+                if not any(existing.url == src.url for existing in sources):
+                    sources.append(src)
+
+    cleaned_reply, extracted = _strip_markdown_links(raw_reply)
+    for src in extracted:
+        if not any(existing.url == src.url for existing in sources):
+            sources.append(src)
+
+    force_web = _should_force_web(message)
+    if force_web and not web_used:
+        summary, manual_sources = await web_search_tool(message)
+        if manual_sources:
+            web_used = True
+            for entry in manual_sources:
+                if not any(existing.url == entry.url for existing in sources):
+                    sources.append(entry)
+
+    return ChatResponse(
+        reply=cleaned_reply,
+        used_tools=used_tools,
+        sources=sources,
+        web_search_used=web_used or bool(extracted)
     )
 
-    response = await llm.ainvoke(formatted_messages)
-    return response.content
+
+def _strip_markdown_links(text: str) -> tuple[str, List[SearchSource]]:
+    pattern = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
+    matches = pattern.findall(text)
+    cleaned = pattern.sub(r"\1", text)
+    extracted = [SearchSource(title=title, url=url, snippet="") for title, url in matches]
+    return cleaned, extracted
+
+
+def _should_force_web(message: str) -> bool:
+    lowered = message.lower()
+    force_terms = (
+        "news", "latest", "current", "today", "movie", "film", "show", "release",
+        "box office", "actor", "actress", "music", "song", "stock", "price",
+        "review", "update", "report", "happening", "trend", "earnings"
+    )
+    if "?" in message or len(message.split()) > 15:
+        return True
+    return any(term in lowered for term in force_terms)

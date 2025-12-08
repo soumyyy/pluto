@@ -165,20 +165,6 @@ body {
   color: var(--text-muted);
 }
 
-.thoughts {
-  margin-top: 12px;
-  padding: 8px;
-  border-left: 2px solid rgba(57, 255, 20, 0.5);
-  background: rgba(57, 255, 20, 0.05);
-  font-size: 12px;
-  color: var(--text-muted);
-  list-style: none;
-}
-
-.thoughts li {
-  margin-bottom: 4px;
-}
-
 .source-list {
   margin-top: 12px;
   padding-top: 8px;
@@ -216,10 +202,58 @@ body {
   color: var(--neon);
 }
 
+.source-pill.pending {
+  opacity: 0.6;
+  position: relative;
+}
+
+.source-pill.pending::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--neon);
+  margin-left: 6px;
+  animation: pulse 1s infinite ease-in-out;
+}
+
 .sources-note {
   margin-top: 6px;
   font-size: 11px;
   text-transform: uppercase;
   color: rgba(57, 255, 20, 0.7);
   letter-spacing: 0.3em;
+}
+
+.thinking-dots {
+  display: flex;
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.thinking-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--neon);
+  animation: pulse 1s infinite ease-in-out;
+}
+
+.thinking-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.thinking-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes pulse {
+  0%, 80%, 100% {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
