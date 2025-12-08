@@ -12,6 +12,7 @@ from ..models.schemas import ChatResponse, SearchSource
 from ..tools import (
     search_memories_tool,
     web_search_tool,
+    gmail_search_tool,
 )
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ SYSTEM_PROMPT = """You are Pluto, a personal agent for a single user. You know a
 Formatting rules:
 - Do NOT embed raw URLs or inline citations inside your main response. Rely on the UI to show sources separately.
 - When referencing outside data, mention the publication/source name in plain text (e.g., "According to Indian Express..."), but leave actual links for the UI to display.
+- Use the gmail_inbox tool whenever the user asks about recent emails, Gmail, inbox activity, or "what's new" in their mail.
 - Be verbose when explaining reasoning or listing numeric details so the user gets a useful summary."""
 
 
@@ -55,12 +57,21 @@ async def _web_tool_output(query: str) -> str:
     return json.dumps(payload)
 
 
+async def _gmail_tool_output(user_id: str, query: str) -> str:
+    threads = await gmail_search_tool(user_id=user_id, query=query, limit=5)
+    payload = [thread.dict() for thread in threads]
+    return json.dumps(payload)
+
+
 def _build_tools(user_id: str) -> List[Tool]:
     async def memory_coro(q: str) -> str:
         return await _memory_tool_output(user_id, q)
 
     async def web_coro(q: str) -> str:
         return await _web_tool_output(q)
+
+    async def gmail_coro(q: str) -> str:
+        return await _gmail_tool_output(user_id, q)
 
     return [
         Tool(
@@ -74,6 +85,12 @@ def _build_tools(user_id: str) -> List[Tool]:
             func=lambda q: "Web search available only in async mode.",
             coroutine=web_coro,
             description="Fetch recent information from the internet when the user asks about current events, entertainment news, or unknown facts."
+        ),
+        Tool(
+            name="gmail_inbox",
+            func=lambda q: "Gmail inbox lookup available only in async mode.",
+            coroutine=gmail_coro,
+            description="Summarize the user's Gmail inbox when they ask about new emails, reminders, or anything in Gmail."
         ),
     ]
 
@@ -109,7 +126,6 @@ async def run_chat_agent(user_id: str, conversation_id: str, message: str) -> Ch
 
     for action, action_result in tool_calls:
         tool_name = getattr(action, "tool", None) or getattr(action, "tool_name", "")
-        tool_input = getattr(action, "tool_input", "")
         if tool_name:
             used_tools.append(tool_name)
 
@@ -121,7 +137,6 @@ async def run_chat_agent(user_id: str, conversation_id: str, message: str) -> Ch
                 # thoughts.append(action_result[:200])
                 continue
 
-            summary = payload.get("summary", "")
             raw_sources = payload.get("sources", [])
             for entry in raw_sources:
                 try:
@@ -129,6 +144,24 @@ async def run_chat_agent(user_id: str, conversation_id: str, message: str) -> Ch
                 except Exception:  # pragma: no cover - malformed entry
                     continue
                 if not any(existing.url == src.url for existing in sources):
+                    sources.append(src)
+
+        if tool_name == "gmail_inbox" and isinstance(action_result, str):
+            try:
+                payload = json.loads(action_result)
+            except json.JSONDecodeError:
+                continue
+
+            for entry in payload:
+                try:
+                    src = SearchSource(
+                        title=entry.get("subject", "Gmail thread"),
+                        url=entry.get("link", ""),
+                        snippet=entry.get("summary") or entry.get("snippet", "")
+                    )
+                except Exception:
+                    continue
+                if src.url and not any(existing.url == src.url for existing in sources):
                     sources.append(src)
 
     cleaned_reply, extracted = _strip_markdown_links(raw_reply)

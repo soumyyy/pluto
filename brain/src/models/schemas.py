@@ -38,3 +38,5 @@ class GmailThread(BaseModel):
     id: str
     subject: str
     summary: Optional[str]
+    link: Optional[str] = None
+    last_message_at: Optional[str] = None

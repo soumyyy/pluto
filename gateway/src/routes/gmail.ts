@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getAuthUrl, exchangeCodeForTokens } from '../services/gmailOAuth';
 import { saveGmailTokens } from '../services/db';
-import { fetchRecentThreads } from '../services/gmailClient';
+import { fetchRecentThreads, getGmailProfile, NO_GMAIL_TOKENS } from '../services/gmailClient';
 
 const router = Router();
 const TEST_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -36,14 +36,40 @@ router.get('/callback', async (req, res) => {
 });
 
 router.get('/threads', async (req, res) => {
-  const maxResults = parseInt(req.query.limit as string, 10) || 5;
+  const maxResults = parseInt(req.query.limit as string, 10) || 20;
+  const importanceOnly = req.query.importance_only === 'true';
   try {
-    const threads = await fetchRecentThreads(TEST_USER_ID, maxResults);
-    return res.json({ threads });
+    const threads = await fetchRecentThreads(TEST_USER_ID, maxResults, { importanceOnly });
+    const importantCount = threads.filter((thread) => (thread.importanceScore ?? 0) >= 0).length;
+    const promoCount = threads.length - importantCount;
+    return res.json({
+      threads,
+      meta: {
+        total: threads.length,
+        important: importantCount,
+        promotions: promoCount
+      }
+    });
   } catch (error) {
+    if (error instanceof Error && error.message === NO_GMAIL_TOKENS) {
+      return res.status(401).json({ error: 'Gmail not connected' });
+    }
     console.error('Failed to fetch Gmail threads', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return res.status(500).json({ error: message });
+  }
+});
+
+router.get('/status', async (_req, res) => {
+  try {
+    const profile = await getGmailProfile(TEST_USER_ID);
+    return res.json({ connected: true, email: profile.email, avatarUrl: profile.avatarUrl });
+  } catch (error) {
+    if (error instanceof Error && error.message === NO_GMAIL_TOKENS) {
+      return res.json({ connected: false });
+    }
+    console.error('Failed to fetch Gmail status', error);
+    return res.json({ connected: false });
   }
 });
 

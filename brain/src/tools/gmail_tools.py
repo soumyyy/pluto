@@ -1,13 +1,25 @@
 from typing import List
 from ..models.schemas import Task, GmailThread
+from ..services.gateway_client import fetch_gmail_threads
 
 
-async def gmail_search_tool(user_id: str, query: str) -> List[GmailThread]:
-    # TODO: Call Gmail API via gateway to execute search queries.
+async def gmail_search_tool(user_id: str, query: str, limit: int = 20) -> List[GmailThread]:
     _ = (user_id, query)
-    return [
-        GmailThread(id="thread-1", subject="Demo thread", summary="Follow up about Pluto alpha")
-    ]
+    payload = await fetch_gmail_threads(limit=limit, importance_only=True)
+    raw_threads = payload.get("threads", [])
+    threads: List[GmailThread] = []
+    for entry in raw_threads:
+        summary = entry.get("snippet") or entry.get("summary")
+        threads.append(
+            GmailThread(
+                id=entry.get("threadId", ""),
+                subject=entry.get("subject", "(no subject)"),
+                summary=summary,
+                link=entry.get("link"),
+                last_message_at=entry.get("lastMessageAt"),
+            )
+        )
+    return threads
 
 
 async def gmail_get_thread_tool(user_id: str, thread_id: str) -> GmailThread:
