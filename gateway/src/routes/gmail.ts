@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getAuthUrl, exchangeCodeForTokens } from '../services/gmailOAuth';
 import { saveGmailTokens } from '../services/db';
+import { fetchRecentThreads } from '../services/gmailClient';
 
 const router = Router();
 const TEST_USER_ID = '00000000-0000-0000-0000-000000000001';
@@ -31,6 +32,18 @@ router.get('/callback', async (req, res) => {
   } catch (error) {
     console.error('Failed to exchange Gmail code', error);
     return res.status(500).send('Failed to connect Gmail.');
+  }
+});
+
+router.get('/threads', async (req, res) => {
+  const maxResults = parseInt(req.query.limit as string, 10) || 5;
+  try {
+    const threads = await fetchRecentThreads(TEST_USER_ID, maxResults);
+    return res.json({ threads });
+  } catch (error) {
+    console.error('Failed to fetch Gmail threads', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return res.status(500).json({ error: message });
   }
 });
 

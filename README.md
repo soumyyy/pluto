@@ -45,6 +45,7 @@ Visit http://localhost:3000, send a chat message, and the UI will proxy through 
 - Uses OAuth 2.0 with read-only Gmail scope (`https://www.googleapis.com/auth/gmail.readonly`).
 - Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` in `.env`.
 - Tokens are stored in `gmail_tokens` table (currently in plaintext; future work will encrypt them).
+- After connecting Gmail (`GET /api/gmail/connect`), call `GET /api/gmail/threads?limit=5` to sync the latest threads into Postgres and return summaries to the UI/brain layer.
 
 ## Web Search Notes
 - Pluto uses Tavily for web intelligence. Set `TAVILY_API_KEY` in `.env` to enable it.

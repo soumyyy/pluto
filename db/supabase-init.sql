@@ -64,7 +64,7 @@ create table if not exists gmail_threads (
     last_message_at timestamptz,
     created_at timestamptz not null default now()
 );
-create index if not exists idx_gmail_threads_user_thread on gmail_threads(user_id, thread_id);
+create unique index if not exists idx_gmail_threads_user_thread on gmail_threads(user_id, thread_id);
 
 create table if not exists tasks (
     id uuid primary key default gen_random_uuid(),

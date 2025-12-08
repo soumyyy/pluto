@@ -5,6 +5,7 @@ import { config } from '../config';
 const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
 export function getAuthUrl(state: string) {
+  console.log('[Gmail OAuth] config:', config.googleClientId, config.googleRedirectUri);
   const params = querystring.stringify({
     client_id: config.googleClientId,
     redirect_uri: config.googleRedirectUri,
