@@ -2041,6 +2041,23 @@ anyio = ">=3.4.0,<5"
 full = ["httpx (>=0.22.0)", "itsdangerous", "jinja2", "python-multipart", "pyyaml"]
 
 [[package]]
+name = "tavily-python"
+version = "0.3.4"
+description = "Python wrapper for the Tavily API"
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "tavily_python-0.3.4-py3-none-any.whl", hash = "sha256:7fd41ce5422ccfeade8dab564f5c524b0cc683cc02cbc7bc9625a3275c31355a"},
+    {file = "tavily_python-0.3.4.tar.gz", hash = "sha256:acc3bb08668d05ee2decf94dba17811bc434a18c78acb7a1ca7c483b3a316f38"},
+]
+
+[package.dependencies]
+httpx = "*"
+requests = "*"
+tiktoken = ">=0.5.1"
+
+[[package]]
 name = "tenacity"
 version = "8.5.0"
 description = "Retry code until it succeeds"
@@ -2617,4 +2634,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "3a5c3360a2fb244a97d109d816ed6b1534081fca7599c448bb90697a8f0713f3"
+content-hash = "daad519bfa5762663d59dff52d9d92857f46a970b1b51871cb2650f8f8c222ed"

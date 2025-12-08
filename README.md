@@ -46,6 +46,10 @@ Visit http://localhost:3000, send a chat message, and the UI will proxy through 
 - Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` in `.env`.
 - Tokens are stored in `gmail_tokens` table (currently in plaintext; future work will encrypt them).
 
+## Web Search Notes
+- Pluto uses Tavily for web intelligence. Set `TAVILY_API_KEY` in `.env` to enable it.
+- When enabled, the brain service will call Tavily for complex/unknown questions, share which sources were queried, and summarize the findings inside the chat response.
+
 ## Security Notes
 - Keep secrets in environment variables, not in code. When using Supabase, store the full connection string (with password) only in `.env`.
 - Gmail tokens and other sensitive data should be encrypted/restricted; placeholder TODO comments mark where that enforcement is planned.

@@ -6,10 +6,19 @@ import { Sidebar } from '../components/Sidebar';
 import { MessageBubble } from '../components/MessageBubble';
 import { post } from '../lib/apiClient';
 
+type Source = {
+  title: string;
+  url: string;
+  snippet: string;
+};
+
 type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  sources?: Source[];
+  thoughts?: string[];
+  webSearchUsed?: boolean;
 };
 
 export default function ChatPage() {
@@ -39,7 +48,10 @@ export default function ChatPage() {
       const assistantMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: response.reply ?? 'Pluto is thinking...'
+        content: response.reply ?? 'Pluto is thinking...',
+        sources: response.sources ?? [],
+        thoughts: response.thoughts ?? [],
+        webSearchUsed: response.web_search_used ?? false
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -67,7 +79,14 @@ export default function ChatPage() {
             </p>
           ) : (
             messages.map((message) => (
-              <MessageBubble key={message.id} role={message.role} content={message.content} />
+              <MessageBubble
+                key={message.id}
+                role={message.role}
+                content={message.content}
+                sources={message.sources}
+                thoughts={message.thoughts}
+                webSearchUsed={message.webSearchUsed}
+              />
             ))
           )}
         </div>

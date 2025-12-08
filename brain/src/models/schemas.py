@@ -8,9 +8,18 @@ class ChatRequest(BaseModel):
     message: str = Field(..., description="Latest user utterance")
 
 
+class SearchSource(BaseModel):
+    title: str
+    url: str
+    snippet: str
+
+
 class ChatResponse(BaseModel):
     reply: str
-    used_tools: List[str] = []
+    used_tools: List[str] = Field(default_factory=list)
+    sources: List[SearchSource] = Field(default_factory=list)
+    thoughts: List[str] = Field(default_factory=list)
+    web_search_used: bool = False
 
 
 class Memory(BaseModel):

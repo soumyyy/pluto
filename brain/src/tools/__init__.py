@@ -5,6 +5,7 @@ from .gmail_tools import (
     gmail_summarize_thread_tool,
     gmail_extract_tasks_tool,
 )
+from .web_search import web_search_tool
 
 __all__ = [
     "search_memories_tool",
@@ -13,4 +14,5 @@ __all__ = [
     "gmail_get_thread_tool",
     "gmail_summarize_thread_tool",
     "gmail_extract_tasks_tool",
+    "web_search_tool",
 ]

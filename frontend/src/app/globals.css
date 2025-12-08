@@ -164,3 +164,62 @@ body {
   text-transform: uppercase;
   color: var(--text-muted);
 }
+
+.thoughts {
+  margin-top: 12px;
+  padding: 8px;
+  border-left: 2px solid rgba(57, 255, 20, 0.5);
+  background: rgba(57, 255, 20, 0.05);
+  font-size: 12px;
+  color: var(--text-muted);
+  list-style: none;
+}
+
+.thoughts li {
+  margin-bottom: 4px;
+}
+
+.source-list {
+  margin-top: 12px;
+  padding-top: 8px;
+}
+
+.source-title {
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(57, 255, 20, 0.8);
+  margin-bottom: 6px;
+}
+
+.source-pill-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.source-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(57, 255, 20, 0.6);
+  background: rgba(57, 255, 20, 0.1);
+  font-size: 11px;
+  color: var(--neon);
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.source-pill:hover {
+  background: rgba(57, 255, 20, 0.25);
+  color: var(--neon);
+}
+
+.sources-note {
+  margin-top: 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: rgba(57, 255, 20, 0.7);
+  letter-spacing: 0.3em;
+}
