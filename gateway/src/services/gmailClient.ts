@@ -10,6 +10,7 @@ export interface GmailThreadSummary extends GmailThreadRecord {
   importanceScore?: number;
   category?: string;
   labelIds?: string[];
+  labelNames?: string[];
 }
 
 async function getAuthorizedGmail(userId: string) {
@@ -51,20 +52,30 @@ async function getAuthorizedGmail(userId: string) {
 interface ThreadFilters {
   importanceOnly?: boolean;
   maxResults?: number;
+  startDate?: string;
+  endDate?: string;
+  pageToken?: string;
 }
 
 export async function fetchRecentThreads(
   userId: string,
-  maxResults = 5,
+  maxResults = 20,
   filters: ThreadFilters = {}
-): Promise<GmailThreadSummary[]> {
+): Promise<{ threads: GmailThreadSummary[]; nextPageToken?: string; counts: Record<string, number> }> {
   const gmail = await getAuthorizedGmail(userId);
-  const fetchLimit = Math.min(filters.maxResults ?? maxResults ?? 5, 50);
-  const threadList = await gmail.users.threads.list({ userId: 'me', maxResults: fetchLimit });
+  const fetchLimit = Math.min(filters.maxResults ?? maxResults ?? 20, 1000);
+  const query = buildQuery(filters.startDate, filters.endDate, filters.importanceOnly !== false);
+  const threadList = await gmail.users.threads.list({
+    userId: 'me',
+    maxResults: fetchLimit,
+    pageToken: filters.pageToken,
+    q: query
+  });
   const summaries: GmailThreadSummary[] = [];
+  const counts: Record<string, number> = {};
 
   if (!threadList.data.threads) {
-    return summaries;
+    return { threads: summaries, nextPageToken: undefined, counts };
   }
 
   for (const thread of threadList.data.threads) {
@@ -73,7 +84,7 @@ export async function fetchRecentThreads(
       userId: 'me',
       id: thread.id,
       format: 'metadata',
-      metadataHeaders: ['Subject', 'From', 'Date']
+      metadataHeaders: ['Subject', 'From', 'Date', 'To']
     });
 
     const lastMessage = detail.data.messages?.[detail.data.messages.length - 1];
@@ -85,7 +96,8 @@ export async function fetchRecentThreads(
       ? new Date(Number(lastMessage.internalDate))
       : undefined;
     const labelIds = lastMessage?.labelIds || detail.data.messages?.[0]?.labelIds || [];
-    const { importanceScore, category, isPromotional } = scoreThread(subject, snippet, sender, labelIds || []);
+    const labelNames = mapLabelIds(labelIds);
+    const { importanceScore, category, isPromotional } = scoreThread(subject, snippet, sender, labelNames || []);
 
     if (filters.importanceOnly && isPromotional) {
       continue;
@@ -98,10 +110,13 @@ export async function fetchRecentThreads(
       sender,
       category,
       importanceScore,
-      labelIds,
       lastMessageAt: lastMessageAt ?? null,
-      link: `https://mail.google.com/mail/u/0/#inbox/${thread.id}`
+      link: `https://mail.google.com/mail/u/0/#inbox/${thread.id}`,
+      labelIds,
+      labelNames,
+      expiresAt: computeExpiry(category, lastMessageAt ?? new Date())
     });
+    counts[category] = (counts[category] || 0) + 1;
   }
 
   try {
@@ -109,7 +124,7 @@ export async function fetchRecentThreads(
   } catch (error) {
     console.warn('Failed to persist gmail threads', error);
   }
-  return summaries;
+  return { threads: summaries, nextPageToken: threadList.data.nextPageToken, counts };
 }
 
 export async function getGmailProfile(userId: string): Promise<{ email: string; avatarUrl: string }> {
@@ -131,20 +146,52 @@ const PROMO_LABELS = new Set([
   'CATEGORY_FORUMS'
 ]);
 
-function scoreThread(subject: string, snippet: string, sender: string, labelIds: string[]) {
+const LABEL_NAME_MAP: Record<string, string> = {
+  CATEGORY_PROMOTIONS: 'Promotions',
+  CATEGORY_SOCIAL: 'Social',
+  CATEGORY_UPDATES: 'Updates',
+  CATEGORY_FORUMS: 'Forums',
+  IMPORTANT: 'Important'
+};
+
+function mapLabelIds(ids: string[]): string[] {
+  return ids
+    .filter(Boolean)
+    .map((id) => LABEL_NAME_MAP[id] || id.replace('CATEGORY_', '').toLowerCase());
+}
+
+function buildQuery(startDate?: string, endDate?: string, importanceOnly = true) {
+  const parts: string[] = [];
+  if (startDate) {
+    parts.push(`after:${startDate}`);
+  }
+  if (endDate) {
+    parts.push(`before:${endDate}`);
+  }
+  if (importanceOnly) {
+    parts.push('category:primary OR label:important');
+  }
+  return parts.join(' ');
+}
+
+function scoreThread(subject: string, snippet: string, sender: string, labelNames: string[]) {
   let score = 0;
   let category = 'primary';
   let isPromotional = false;
 
-  if (labelIds.some((label) => PROMO_LABELS.has(label))) {
+  if (labelNames.some((label) => PROMO_LABELS.has(`CATEGORY_${label.toUpperCase()}`))) {
     category = 'promotions';
     score -= 2;
     isPromotional = true;
+  }
+  if (labelNames.includes('Important')) {
+    score += 2;
   }
 
   const lowered = (subject + ' ' + snippet).toLowerCase();
   if (IMPORTANT_KEYWORDS.some((keyword) => lowered.includes(keyword))) {
     score += 2;
+    category = 'orders';
   }
   if (PROMO_KEYWORDS.some((keyword) => lowered.includes(keyword))) {
     score -= 1;
@@ -155,4 +202,21 @@ function scoreThread(subject: string, snippet: string, sender: string, labelIds:
   }
 
   return { importanceScore: score, category, isPromotional };
+}
+
+function computeExpiry(category: string, referenceDate: Date): Date {
+  const base = referenceDate.getTime();
+  const oneDay = 24 * 60 * 60 * 1000;
+
+  if (category === 'primary' || category === 'personal') {
+    return new Date(base + 365 * oneDay);
+  }
+  if (category === 'orders') {
+    return new Date(base + 30 * oneDay);
+  }
+  if (category === 'promotions') {
+    return new Date(base + 7 * oneDay);
+  }
+
+  return new Date(base + 30 * oneDay);
 }

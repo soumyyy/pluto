@@ -17,6 +17,7 @@ async def gmail_search_tool(user_id: str, query: str, limit: int = 20) -> List[G
                 summary=summary,
                 link=entry.get("link"),
                 last_message_at=entry.get("lastMessageAt"),
+                category=entry.get("category")
             )
         )
     return threads

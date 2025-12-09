@@ -39,7 +39,7 @@ router.get('/threads', async (req, res) => {
   const maxResults = parseInt(req.query.limit as string, 10) || 20;
   const importanceOnly = req.query.importance_only === 'true';
   try {
-    const threads = await fetchRecentThreads(TEST_USER_ID, maxResults, { importanceOnly });
+    const { threads } = await fetchRecentThreads(TEST_USER_ID, maxResults, { importanceOnly });
     const importantCount = threads.filter((thread) => (thread.importanceScore ?? 0) >= 0).length;
     const promoCount = threads.length - importantCount;
     return res.json({
@@ -70,6 +70,50 @@ router.get('/status', async (_req, res) => {
     }
     console.error('Failed to fetch Gmail status', error);
     return res.json({ connected: false });
+  }
+});
+
+router.post('/threads/full-sync', async (req, res) => {
+  const { startDate, endDate } = req.body as { startDate?: string; endDate?: string };
+  if (!startDate || !endDate) {
+    return res.status(400).json({ error: 'startDate and endDate are required' });
+  }
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffMs = end.getTime() - start.getTime();
+  const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+  if (diffMs <= 0 || diffMs > oneYearMs) {
+    return res.status(400).json({ error: 'Window must be positive and at most 1 year' });
+  }
+
+  try {
+    let pageToken: string | undefined;
+    let synced = 0;
+    const categoryCounts: Record<string, number> = {};
+    do {
+      const result = await fetchRecentThreads(TEST_USER_ID, 1000, {
+        maxResults: 1000,
+        startDate,
+        endDate,
+        importanceOnly: false,
+        pageToken
+      });
+      synced += result.threads.length;
+      pageToken = result.nextPageToken;
+      Object.entries(result.counts).forEach(([category, count]) => {
+        categoryCounts[category] = (categoryCounts[category] || 0) + count;
+      });
+      console.log(`[Gmail Sync] fetched ${result.threads.length} threads (categories:`, result.counts, ')');
+    } while (pageToken);
+
+    return res.json({ synced, categories: categoryCounts });
+  } catch (error) {
+    if (error instanceof Error && error.message === NO_GMAIL_TOKENS) {
+      return res.status(401).json({ error: 'Gmail not connected' });
+    }
+    console.error('Full sync failed', error);
+    return res.status(500).json({ error: 'Failed to sync Gmail threads' });
   }
 });
 

@@ -61,6 +61,9 @@ export interface GmailThreadRecord {
   subject: string;
   snippet: string;
   lastMessageAt?: Date | null;
+  category?: string;
+  importanceScore?: number;
+  expiresAt?: Date | null;
 }
 
 export async function saveGmailThreads(userId: string, threads: GmailThreadRecord[]) {
@@ -69,13 +72,25 @@ export async function saveGmailThreads(userId: string, threads: GmailThreadRecor
   try {
     for (const thread of threads) {
       await client.query(
-        `INSERT INTO gmail_threads (id, user_id, thread_id, subject, summary, last_message_at)
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
+        `INSERT INTO gmail_threads (id, user_id, thread_id, subject, summary, category, importance_score, expires_at, last_message_at)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (user_id, thread_id)
          DO UPDATE SET subject = EXCLUDED.subject,
                        summary = EXCLUDED.summary,
+                       category = EXCLUDED.category,
+                       importance_score = EXCLUDED.importance_score,
+                       expires_at = EXCLUDED.expires_at,
                        last_message_at = EXCLUDED.last_message_at`,
-        [userId, thread.threadId, thread.subject, thread.snippet, thread.lastMessageAt ?? null]
+        [
+          userId,
+          thread.threadId,
+          thread.subject,
+          thread.snippet,
+          thread.category,
+          thread.importanceScore ?? 0,
+          thread.expiresAt ?? null,
+          thread.lastMessageAt ?? null
+        ]
       );
     }
   } finally {

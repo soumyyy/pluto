@@ -58,6 +58,9 @@ CREATE TABLE IF NOT EXISTS gmail_threads (
     thread_id TEXT NOT NULL,
     subject TEXT,
     summary TEXT,
+    category TEXT,
+    importance_score INT,
+    expires_at TIMESTAMPTZ,
     last_message_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

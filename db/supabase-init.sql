@@ -61,6 +61,9 @@ create table if not exists gmail_threads (
     thread_id text not null,
     subject text,
     summary text,
+    category text,
+    importance_score integer,
+    expires_at timestamptz,
     last_message_at timestamptz,
     created_at timestamptz not null default now()
 );
