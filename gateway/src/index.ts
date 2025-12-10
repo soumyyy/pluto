@@ -7,6 +7,7 @@ import gmailRouter from './routes/gmail';
 import profileRouter from './routes/profile';
 import outlookRouter from './routes/outlook';
 import { scheduleGmailJobs } from './jobs/gmailJobs';
+import memoryRouter from './routes/memory';
 // import { graphqlHTTP } from 'express-graphql';
 // import { schema } from './graphql/schema';
 // import { rootValue } from './graphql/resolvers';
@@ -25,6 +26,7 @@ app.use('/api/chat', chatRouter);
 app.use('/api/gmail', gmailRouter);
 app.use('/api/outlook', outlookRouter);
 app.use('/api/profile', profileRouter);
+app.use('/api/memory', memoryRouter);
 
 // GraphQL stub for future dashboards
 // app.use('/graphql', graphqlHTTP({

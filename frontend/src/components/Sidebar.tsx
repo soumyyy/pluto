@@ -568,7 +568,33 @@ interface BespokeMemoryModalProps {
 
 function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const allowedExtensions = ['.txt', '.md', '.rtf', '.docx', '.json', '.csv'];
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [ingestionStatus, setIngestionStatus] = useState<{ status: string; processed: number; total: number } | null>(null);
+  const allowedExtensions = ['.md'];
+
+  useEffect(() => {
+    async function fetchStatus() {
+      try {
+        const response = await fetch(`${GATEWAY_URL}/api/memory/status`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.ingestion) {
+          setIngestionStatus({
+            status: data.ingestion.status,
+            processed: data.ingestion.processedFiles,
+            total: data.ingestion.totalFiles
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load memory ingestion status', error);
+      }
+    }
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files || []);
@@ -576,6 +602,37 @@ function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
       allowedExtensions.some((ext) => file.name.toLowerCase().endsWith(ext))
     );
     setSelectedFiles(filtered);
+    setUploadMessage(null);
+  }
+
+  async function handleUpload() {
+    if (!selectedFiles.length || isUploading) return;
+    setIsUploading(true);
+    setUploadMessage(null);
+    try {
+      const formData = new FormData();
+      selectedFiles.forEach((file) => {
+        formData.append('files', file, file.name);
+        const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+        formData.append('paths', relativePath || file.name);
+      });
+      const response = await fetch(`${GATEWAY_URL}/api/memory/upload`, {
+        method: 'POST',
+        body: formData
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Upload failed');
+      }
+      const data = await response.json();
+      setUploadMessage(`Upload started. Ingestion ID: ${data.ingestionId}`);
+      setSelectedFiles([]);
+    } catch (error) {
+      console.error('Failed to upload bespoke memory', error);
+      setUploadMessage((error as Error).message || 'Upload failed');
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   return (
@@ -594,12 +651,15 @@ function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
           <section>
             <h3>Upload Local Folder</h3>
             <p className="text-muted">
-              Drop text-first repositories (journals, notes, CSVs) or select multiple files from your folder. We skip images and PDFs automatically.
+              Drop Markdown repositories (journals, zettelkasten, docs) or select multiple `.md` files from your folder. Images/PDFs are ignored.
             </p>
             <label className="memory-upload">
               <input
                 type="file"
                 multiple
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore webkitdirectory is valid on Chromium
+                webkitdirectory="true"
                 onChange={handleFileChange}
                 accept={allowedExtensions.join(',')}
               />
@@ -614,7 +674,21 @@ function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
                   ))}
                   {selectedFiles.length > 5 && <li>+ {selectedFiles.length - 5} more…</li>}
                 </ul>
+                <button
+                  type="button"
+                  className="memory-upload-btn"
+                  onClick={handleUpload}
+                  disabled={isUploading}
+                >
+                  {isUploading ? 'Uploading…' : 'Upload'}
+                </button>
               </div>
+            )}
+            {uploadMessage && <p className="text-muted">{uploadMessage}</p>}
+            {ingestionStatus && (
+              <p className="text-muted">
+                Latest ingestion: {ingestionStatus.status} ({ingestionStatus.processed}/{ingestionStatus.total} files)
+              </p>
             )}
           </section>
           <section>

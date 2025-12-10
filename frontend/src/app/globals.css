@@ -635,6 +635,24 @@ body {
   font-size: 12px;
 }
 
+.memory-upload-btn {
+  margin-top: 10px;
+  border: 1px solid rgba(57, 255, 20, 0.4);
+  background: rgba(57, 255, 20, 0.1);
+  color: var(--neon);
+  padding: 8px 14px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.memory-upload-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .memory-plan {
   margin: 0;
   padding-left: 18px;

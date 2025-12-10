@@ -143,3 +143,12 @@ CREATE TABLE IF NOT EXISTS memory_chunks (
 );
 CREATE INDEX IF NOT EXISTS idx_memory_chunks_ingestion ON memory_chunks(ingestion_id);
 CREATE INDEX IF NOT EXISTS idx_memory_chunks_user ON memory_chunks(user_id);
+
+CREATE TABLE IF NOT EXISTS memory_chunk_embeddings (
+    chunk_id UUID PRIMARY KEY REFERENCES memory_chunks(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id),
+    source TEXT NOT NULL,
+    embedding DOUBLE PRECISION[] NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_memory_chunk_embeddings_user ON memory_chunk_embeddings(user_id);

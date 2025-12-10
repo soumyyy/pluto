@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .models.schemas import ChatRequest, ChatResponse
 from .agents import run_chat_agent
 from .config import get_settings
+from .services.memory_indexer import process_pending_chunks
 
 app = FastAPI(title="Pluto Brain")
 
@@ -34,4 +35,13 @@ async def chat_endpoint(request: ChatRequest):
         )
         return result
     except Exception as exc:  # pylint: disable=broad-except
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post('/memory/index')
+async def trigger_memory_index():
+    try:
+        processed = await process_pending_chunks()
+        return {"processed": processed}
+    except Exception as exc:  # pragma: no cover
         raise HTTPException(status_code=500, detail=str(exc)) from exc

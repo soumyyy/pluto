@@ -8,15 +8,17 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@types/multer": "^2.0.0",
     "axios": "^1.13.2",
     "cookie-parser": "^1.4.7",
     "cors": "2.8.5",
     "dotenv": "16.4.1",
     "express": "^4.22.1",
     "googleapis": "126.0.1",
+    "multer": "^2.0.2",
+    "node-cron": "3.0.3",
     "openai": "^6.10.0",
-    "pg": "8.11.3",
-    "node-cron": "3.0.3"
+    "pg": "8.11.3"
   },
   "devDependencies": {
     "@types/cookie-parser": "1.4.3",

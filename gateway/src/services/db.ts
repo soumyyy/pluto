@@ -332,3 +332,106 @@ export async function upsertUserProfile(userId: string, data: Record<string, unk
     client.release();
   }
 }
+export interface MemoryIngestion {
+  id: string;
+  userId: string;
+  source: string;
+  totalFiles: number;
+  processedFiles: number;
+  status: string;
+  error?: string | null;
+  createdAt: Date;
+  completedAt?: Date | null;
+}
+
+export async function createMemoryIngestion(params: { userId: string; source: string; totalFiles: number }): Promise<string> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `INSERT INTO memory_ingestions (id, user_id, source, total_files)
+       VALUES (gen_random_uuid(), $1, $2, $3)
+       RETURNING id`,
+      [params.userId, params.source, params.totalFiles]
+    );
+    return result.rows[0].id as string;
+  } finally {
+    client.release();
+  }
+}
+
+export async function updateMemoryIngestion(params: {
+  ingestionId: string;
+  processedFiles?: number;
+  status?: string;
+  error?: string | null;
+}) {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `UPDATE memory_ingestions
+       SET processed_files = COALESCE($2, processed_files),
+           status = COALESCE($3, status),
+           error = COALESCE($4, error),
+           completed_at = CASE WHEN $3 IN ('completed', 'failed') THEN NOW() ELSE completed_at END
+       WHERE id = $1`,
+      [params.ingestionId, params.processedFiles ?? null, params.status ?? null, params.error ?? null]
+    );
+  } finally {
+    client.release();
+  }
+}
+
+export async function getLatestMemoryIngestion(userId: string, source: string): Promise<MemoryIngestion | null> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `SELECT id,
+              user_id as "userId",
+              source,
+              total_files as "totalFiles",
+              processed_files as "processedFiles",
+              status,
+              error,
+              created_at as "createdAt",
+              completed_at as "completedAt"
+       FROM memory_ingestions
+       WHERE user_id = $1 AND source = $2
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId, source]
+    );
+    if (result.rowCount === 0) return null;
+    return result.rows[0] as MemoryIngestion;
+  } finally {
+    client.release();
+  }
+}
+
+export async function insertMemoryChunk(params: {
+  ingestionId: string;
+  userId: string;
+  source: string;
+  filePath: string;
+  chunkIndex: number;
+  content: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `INSERT INTO memory_chunks (id, ingestion_id, user_id, source, file_path, chunk_index, content, metadata)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)`,
+      [
+        params.ingestionId,
+        params.userId,
+        params.source,
+        params.filePath,
+        params.chunkIndex,
+        params.content,
+        params.metadata ?? {}
+      ]
+    );
+  } finally {
+    client.release();
+  }
+}
