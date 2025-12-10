@@ -56,6 +56,15 @@ export async function getGmailTokens(userId: string) {
   }
 }
 
+export async function deleteGmailTokens(userId: string) {
+  const client = await pool.connect();
+  try {
+    await client.query(`DELETE FROM gmail_tokens WHERE user_id = $1`, [userId]);
+  } finally {
+    client.release();
+  }
+}
+
 export interface GmailThreadRecord {
   threadId: string;
   subject: string;

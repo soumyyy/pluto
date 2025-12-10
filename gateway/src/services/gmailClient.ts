@@ -20,7 +20,7 @@ export interface GmailThreadSummary extends GmailThreadRecord {
   labelNames?: string[];
 }
 
-async function getAuthorizedGmail(userId: string) {
+async function getAuthorizedOAuthClient(userId: string) {
   const tokens = await getGmailTokens(userId);
   if (!tokens) {
     const error = new Error(NO_GMAIL_TOKENS);
@@ -53,6 +53,11 @@ async function getAuthorizedGmail(userId: string) {
     }
   });
 
+  return oauth2Client;
+}
+
+async function getAuthorizedGmail(userId: string) {
+  const oauth2Client = await getAuthorizedOAuthClient(userId);
   return google.gmail({ version: 'v1', auth: oauth2Client });
 }
 
@@ -146,14 +151,52 @@ export async function fetchRecentThreads(
 }
 
 export async function getGmailProfile(userId: string): Promise<{ email: string; avatarUrl: string; name: string }> {
-  const gmail = await getAuthorizedGmail(userId);
-  const profile = await gmail.users.getProfile({ userId: 'me' });
-  const email = profile.data.emailAddress || '';
-  const name = email ? email.split('@')[0] : 'Gmail user';
-  const avatarUrl = email
-    ? `https://www.google.com/s2/photos/public/${encodeURIComponent(email)}?sz=96`
-    : '';
-  return { email, avatarUrl, name };
+  const oauthClient = await getAuthorizedOAuthClient(userId);
+  const oauth2 = google.oauth2({ version: 'v2', auth: oauthClient });
+  let email = '';
+  let avatarUrl = '';
+  let name = '';
+
+  try {
+    const { data } = await oauth2.userinfo.get();
+    email = data.email || '';
+    avatarUrl = data.picture || '';
+    name = data.name || data.given_name || (email ? email.split('@')[0] : '');
+  } catch (error) {
+    console.warn('Failed to fetch userinfo profile', error);
+  }
+
+  if (!avatarUrl || !name) {
+    try {
+      const people = google.people({ version: 'v1', auth: oauthClient });
+      const { data } = await people.people.get({
+        resourceName: 'people/me',
+        personFields: 'photos,names'
+      });
+      if (!avatarUrl) {
+        avatarUrl = data.photos?.find((photo) => photo.url)?.url || avatarUrl;
+      }
+      if (!name) {
+        name = data.names?.[0]?.displayName || data.names?.[0]?.givenName || name;
+      }
+    } catch (error) {
+      console.warn('Failed to fetch People API profile', error);
+    }
+  }
+
+  if (!email || (!avatarUrl && !name)) {
+    const gmail = google.gmail({ version: 'v1', auth: oauthClient });
+    const profile = await gmail.users.getProfile({ userId: 'me' });
+    email = email || profile.data.emailAddress || '';
+    if (!name) {
+      name = email ? email.split('@')[0] : 'Gmail user';
+    }
+    if (!avatarUrl && email) {
+      avatarUrl = `https://www.google.com/s2/photos/profile/${encodeURIComponent(email)}?sz=96`;
+    }
+  }
+
+  return { email, avatarUrl, name: name || 'Gmail user' };
 }
 
 const PROMO_KEYWORDS = ['unsubscribe', 'sale', '% off', 'deal', 'promo', 'special offer'];

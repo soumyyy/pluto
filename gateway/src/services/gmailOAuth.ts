@@ -2,7 +2,11 @@ import axios from 'axios';
 import querystring from 'node:querystring';
 import { config } from '../config';
 
-const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+const SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/userinfo.email'
+].join(' ');
 
 export function getAuthUrl(state: string) {
   console.log('[Gmail OAuth] config:', config.googleClientId, config.googleRedirectUri);
@@ -10,7 +14,7 @@ export function getAuthUrl(state: string) {
     client_id: config.googleClientId,
     redirect_uri: config.googleRedirectUri,
     response_type: 'code',
-    scope: GMAIL_SCOPE,
+    scope: SCOPES,
     access_type: 'offline',
     prompt: 'consent',
     state
@@ -44,4 +48,20 @@ export async function exchangeCodeForTokens(code: string) {
     scope: string;
     token_type: string;
   };
+}
+
+export async function revokeToken(token: string) {
+  try {
+    await axios.post(
+      'https://oauth2.googleapis.com/revoke',
+      querystring.stringify({ token }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+  } catch (error) {
+    console.warn('Failed to revoke Gmail token', error);
+  }
 }

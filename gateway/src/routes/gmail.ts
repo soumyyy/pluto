@@ -1,6 +1,12 @@
 import { Router } from 'express';
-import { getAuthUrl, exchangeCodeForTokens } from '../services/gmailOAuth';
-import { saveGmailTokens, removeExpiredGmailThreads, searchGmailEmbeddings } from '../services/db';
+import { getAuthUrl, exchangeCodeForTokens, revokeToken } from '../services/gmailOAuth';
+import {
+  saveGmailTokens,
+  removeExpiredGmailThreads,
+  searchGmailEmbeddings,
+  getGmailTokens,
+  deleteGmailTokens
+} from '../services/db';
 import { fetchRecentThreads, getGmailProfile, NO_GMAIL_TOKENS } from '../services/gmailClient';
 import { embedEmailText } from '../services/embeddings';
 import { TEST_USER_ID } from '../constants';
@@ -71,6 +77,22 @@ router.get('/status', async (_req, res) => {
     }
     console.error('Failed to fetch Gmail status', error);
     return res.json({ connected: false });
+  }
+});
+
+router.post('/disconnect', async (_req, res) => {
+  try {
+    const tokens = await getGmailTokens(TEST_USER_ID);
+    if (tokens?.accessToken) {
+      await revokeToken(tokens.accessToken);
+    } else if (tokens?.refreshToken) {
+      await revokeToken(tokens.refreshToken);
+    }
+    await deleteGmailTokens(TEST_USER_ID);
+    return res.json({ status: 'disconnected' });
+  } catch (error) {
+    console.error('Failed to disconnect Gmail', error);
+    return res.status(500).json({ error: 'Failed to disconnect Gmail' });
   }
 });
 

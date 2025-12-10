@@ -43,6 +43,7 @@ export function Sidebar() {
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const connectUrl = `${GATEWAY_URL}/api/gmail/connect`;
 
   useEffect(() => {
@@ -86,6 +87,22 @@ export function Sidebar() {
     loadProfile();
   }, []);
 
+  async function handleDisconnect() {
+    if (disconnecting) return;
+    setDisconnecting(true);
+    try {
+      const response = await fetch(`${GATEWAY_URL}/api/gmail/disconnect`, {
+        method: 'POST'
+      });
+      if (!response.ok) throw new Error('Failed to disconnect Gmail');
+      setGmailStatus({ connected: false });
+    } catch (error) {
+      console.error('Failed to disconnect Gmail', error);
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
   return (
     <>
       <div>
@@ -127,6 +144,14 @@ export function Sidebar() {
                 <p className="gmail-email">{gmailStatus.name ?? gmailStatus.email ?? 'Gmail account'}</p>
               </div>
             </div>
+            <button
+              type="button"
+              className="gmail-button danger"
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+            >
+              {disconnecting ? 'Logging out…' : 'Logout'}
+            </button>
           </div>
         ) : (
           <div className="gmail-card">

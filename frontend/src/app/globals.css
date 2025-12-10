@@ -285,6 +285,21 @@ body {
   background: rgba(57, 255, 20, 0.2);
 }
 
+.gmail-button.danger {
+  border-color: rgba(255, 90, 90, 0.7);
+  color: #ff8a8a;
+  background: rgba(255, 90, 90, 0.08);
+}
+
+.gmail-button.danger:hover {
+  background: rgba(255, 90, 90, 0.2);
+}
+
+.gmail-button.danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .profile-card {
   border: 1px solid rgba(57, 255, 20, 0.2);
   padding: 12px;
