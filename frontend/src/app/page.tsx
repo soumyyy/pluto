@@ -1,12 +1,11 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { FormEvent, useState } from 'react';
 import { ChatLayout } from '../components/ChatLayout';
 import { Sidebar } from '../components/Sidebar';
 import { MessageBubble } from '../components/MessageBubble';
 import { post } from '../lib/apiClient';
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+import { useSessionGuard } from '@/hooks/useSessionGuard';
 
 type Source = {
   title: string;
@@ -24,50 +23,11 @@ type ChatMessage = {
 };
 
 export default function ChatPage() {
-  const router = useRouter();
-  const [authorized, setAuthorized] = useState(false);
+  const authorized = useSessionGuard();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function verifyAccess() {
-      if (typeof window === 'undefined') return;
-      const hasProfile = localStorage.getItem('plutoOnboarded') === 'true';
-      if (!hasProfile) {
-        window.alert('Login window');
-        router.replace('/login');
-        return;
-      }
-      try {
-        const response = await fetch(`${GATEWAY_URL}/api/gmail/status`);
-        if (!response.ok) throw new Error('status failed');
-        const data = await response.json();
-        if (!data.connected) {
-          window.alert('Login window');
-          router.replace('/login');
-          return;
-        }
-      } catch (error) {
-        console.warn('Failed to verify Gmail status', error);
-        window.alert('Login window');
-        router.replace('/login');
-        return;
-      }
-      if (!cancelled) {
-        setAuthorized(true);
-      }
-    }
-    verifyAccess();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
-
-  if (!authorized) {
-    return null;
-  }
+  if (!authorized) return null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

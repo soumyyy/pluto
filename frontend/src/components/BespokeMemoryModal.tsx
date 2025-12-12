@@ -303,9 +303,6 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
           <div>
             <p className="profile-name">Bespoke Memory</p>
           </div>
-          <button className="profile-close" type="button" onClick={onClose}>
-            Close
-          </button>
         </div>
         <div className="profile-modal-body">
           <div className="memory-columns">
@@ -346,6 +343,11 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
                </section>
             </div>
           </div>
+        </div>
+        <div className="profile-modal-footer">
+          <button type="button" className="profile-done-btn" onClick={onClose}>
+            Done
+          </button>
         </div>
       </div>
     </div>
@@ -590,6 +592,9 @@ const MemoryGraphPanel = memo(function MemoryGraphPanel({
   );
 });
 
+const GRAPH_WIDTH = 640;
+const GRAPH_HEIGHT = 420;
+
 interface PositionedFileNode extends FileGraphNode {
   x: number;
   y: number;
@@ -605,6 +610,12 @@ interface FileGraphLayout {
     target: PositionedFileNode;
     stroke: string;
   }[];
+  bounds: {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+  };
 }
 
 function computeFileGraphLayout(graph: FileGraphResponse | null): FileGraphLayout | null {
@@ -614,14 +625,16 @@ function computeFileGraphLayout(graph: FileGraphResponse | null): FileGraphLayou
     const bucket = groupedByIngestion.get(node.ingestionId) ?? [];
     bucket.push(node);
     groupedByIngestion.set(node.ingestionId, bucket);
-});
-  const baseRadius = 120;
-  const radiusStep = 120;
+  });
+  const maxRadius = Math.min(GRAPH_WIDTH, GRAPH_HEIGHT) / 2 - 40;
+  const groupCount = Math.max(1, groupedByIngestion.size);
+  const radiusStep = maxRadius / groupCount;
+  const baseRadius = radiusStep * 0.9;
   const colorPalette = ['#7dd3fc', '#f472b6', '#a78bfa', '#facc15', '#34d399', '#fb7185'];
   const positionedNodes: PositionedFileNode[] = [];
   let groupIndex = 0;
   groupedByIngestion.forEach((groupNodes) => {
-    const radius = baseRadius + groupIndex * radiusStep;
+    const radius = Math.min(maxRadius, baseRadius + groupIndex * radiusStep);
     const jitter = (Math.random() - 0.5) * 0.4;
     groupNodes.forEach((node, idx) => {
       const angle = (idx / Math.max(1, groupNodes.length)) * Math.PI * 2 + jitter;
@@ -642,8 +655,8 @@ function computeFileGraphLayout(graph: FileGraphResponse | null): FileGraphLayou
       const angle = (idx / Math.max(1, graph.nodes.length)) * Math.PI * 2;
       positionedNodes.push({
         ...node,
-        x: baseRadius * Math.cos(angle),
-        y: baseRadius * Math.sin(angle),
+        x: (maxRadius - 20) * Math.cos(angle),
+        y: (maxRadius - 20) * Math.sin(angle),
         color: colorPalette[idx % colorPalette.length],
         radius: 6
       });
@@ -663,9 +676,20 @@ function computeFileGraphLayout(graph: FileGraphResponse | null): FileGraphLayou
         stroke: 'rgba(86, 238, 255, 0.45)'
       };
     }) ?? [];
+  const filteredEdges = (edges.filter(Boolean) as FileGraphLayout['edges']) ?? [];
+  const bounds = positionedNodes.reduce(
+    (acc, node) => ({
+      minX: Math.min(acc.minX, node.x),
+      maxX: Math.max(acc.maxX, node.x),
+      minY: Math.min(acc.minY, node.y),
+      maxY: Math.max(acc.maxY, node.y)
+    }),
+    { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
+  );
   return {
     nodes: positionedNodes,
-    edges: edges.filter(Boolean) as FileGraphLayout['edges']
+    edges: filteredEdges,
+    bounds
   };
 }
 
@@ -684,9 +708,14 @@ function shallowGraphEqual(a: FileGraphResponse | null, b: FileGraphResponse | n
 }
 
 function FileGraphCanvas({ layout }: { layout: FileGraphLayout }) {
-  const width = 640;
-  const height = 420;
-  const viewBox = `${-width / 2} ${-height / 2} ${width} ${height}`;
+  const width = GRAPH_WIDTH;
+  const height = GRAPH_HEIGHT;
+  const margin = 40;
+  const minX = Math.min(-width / 2, layout.bounds.minX - margin);
+  const maxX = Math.max(width / 2, layout.bounds.maxX + margin);
+  const minY = Math.min(-height / 2, layout.bounds.minY - margin);
+  const maxY = Math.max(height / 2, layout.bounds.maxY + margin);
+  const viewBox = `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
   return (
     <svg className="graph-svg" viewBox={viewBox} role="img" aria-label="Bespoke memory graph">
       <g strokeWidth={1}>

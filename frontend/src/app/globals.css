@@ -416,31 +416,25 @@ body {
   background: #050505;
   border: 1px solid rgba(57, 255, 20, 0.4);
   border-radius: 12px;
-  padding: 18px;
+  padding: 12px 14px 14px;
   box-shadow: 0 0 30px rgba(57, 255, 20, 0.2);
+  display: flex;
+  flex-direction: column;
 }
 
 .memory-modal {
   width: min(1040px, 95vw);
+  height: 640px;
+  overflow: hidden;
 }
 
 .profile-modal-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.profile-close {
-  background: transparent;
-  border: 1px solid rgba(57, 255, 20, 0.4);
-  color: var(--neon);
-  padding: 6px 12px;
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: 11px;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-left: 8px;
 }
 
 .profile-modal-body section {
@@ -464,7 +458,8 @@ body {
 .profile-modal-body-grid {
   display: flex;
   gap: 12px;
-  height: calc(100% - 80px);
+  flex: 1;
+  min-height: 0;
 }
 
 .profile-tabs {
@@ -513,6 +508,39 @@ body {
   margin-bottom: 18px;
 }
 
+.connection-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.connection-card {
+  border: 1px solid rgba(57, 255, 20, 0.25);
+  background: rgba(5, 5, 5, 0.7);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connection-card-btn {
+  align-self: flex-start;
+  border: 1px solid rgba(57, 255, 20, 0.35);
+  background: rgba(57, 255, 20, 0.15);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+}
+
+.connection-card-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .profile-tab-content::-webkit-scrollbar {
   width: 6px;
 }
@@ -522,6 +550,23 @@ body {
 .profile-tab-content::-webkit-scrollbar-thumb {
   background: rgba(57, 255, 20, 0.3);
   border-radius: 999px;
+}
+
+.profile-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+.profile-done-btn {
+  border: 1px solid rgba(57, 255, 20, 0.4);
+  background: rgba(57, 255, 20, 0.15);
+  color: var(--text-primary);
+  padding: 6px 14px;
+  border-radius: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
 }
 
 .profile-field {

@@ -1,53 +1,26 @@
 'use client';
 
-import { useEffect, useState, useRef, ChangeEvent, DragEvent, useCallback } from 'react';
-import { BespokeMemoryModal, type BespokeStatus } from './BespokeMemoryModal';
-import { ProfileModal, type ProfileInfo } from './ProfileModal';
+import { useCallback, useEffect, useState } from 'react';
+import { BespokeMemoryModal } from './BespokeMemoryModal';
+import { ProfileModal } from './ProfileModal';
+import {
+  cacheProfileLocally,
+  fetchSessionSnapshot,
+  type GmailStatus,
+  type SessionSnapshot,
+  type UserProfile
+} from '@/lib/session';
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
 
-interface GmailStatus {
-  connected: boolean;
-  email?: string;
-  avatarUrl?: string;
-  name?: string;
-}
-
 export function Sidebar() {
-  const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null);
-  const [gmailLoading, setGmailLoading] = useState(true);
-  const [profile, setProfile] = useState<ProfileInfo | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
+  const [session, setSession] = useState<SessionSnapshot | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [isBespokeMemoryModalOpen, setIsBespokeMemoryModalOpen] = useState(false);
-  const [localIdentity, setLocalIdentity] = useState<{ name: string }>({
-    name: ''
-  });
+  const [localIdentity, setLocalIdentity] = useState<{ name: string }>({ name: '' });
   const connectUrl = `${GATEWAY_URL}/api/gmail/connect`;
-
-  useEffect(() => {
-    async function loadStatus() {
-      try {
-        const response = await fetch(`${GATEWAY_URL}/api/gmail/status`);
-        if (!response.ok) throw new Error('Failed to load Gmail status');
-        const data = await response.json();
-        setGmailStatus({
-          connected: Boolean(data.connected),
-          email: data.email,
-          avatarUrl: data.avatarUrl,
-          name: data.name
-        });
-      } catch (error) {
-        console.error('Failed to load Gmail status', error);
-        setGmailStatus({ connected: false });
-      } finally {
-        setGmailLoading(false);
-      }
-    }
-
-    loadStatus();
-  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -55,39 +28,65 @@ export function Sidebar() {
     setLocalIdentity({ name });
   }, []);
 
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-    let stopped = false;
-
-    async function loadProfile() {
+  const refreshSession = useCallback(
+    async (initial = false) => {
+      if (initial) {
+        setSessionLoading(true);
+      }
       try {
-        const response = await fetch(`${GATEWAY_URL}/api/profile`);
-        if (!response.ok) throw new Error('Failed to load profile');
-        const data = await response.json();
-        setProfile(data.profile ?? null);
+        const snapshot = await fetchSessionSnapshot();
+        setSession(snapshot);
+        cacheProfileLocally(snapshot.profile);
       } catch (error) {
-        console.error('Failed to load profile', error);
-        setProfile(null);
+        console.error('Failed to load session', error);
+        if (initial) {
+          setSession(null);
+        }
       } finally {
-        if (!stopped) {
-          setProfileLoading(false);
+        if (initial) {
+          setSessionLoading(false);
         }
       }
-    }
+    },
+    []
+  );
 
-    loadProfile();
-    intervalId = setInterval(loadProfile, 5000);
-
-    return () => {
-      stopped = true;
-      if (intervalId) {
-        clearInterval(intervalId);
+  useEffect(() => {
+    let cancelled = false;
+    refreshSession(true);
+    const intervalId = setInterval(() => {
+      if (!cancelled) {
+        refreshSession(false);
       }
+    }, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
     };
-  }, []);
+  }, [refreshSession]);
+
+  const gmailStatus: GmailStatus = session?.gmail ?? { connected: false };
+  const profile: UserProfile | null = session?.profile ?? null;
+  const gmailLoading = sessionLoading || disconnecting;
+
+  const handleProfileUpdated = (nextProfile: UserProfile | null) => {
+    setSession((prev) => {
+      if (!prev) {
+        return {
+          gmail: { connected: false },
+          profile: nextProfile
+        };
+      }
+      return {
+        ...prev,
+        profile: nextProfile
+      };
+    });
+    cacheProfileLocally(nextProfile);
+  };
 
   async function handleGmailAction() {
-    if (gmailStatus?.connected) {
+    if (gmailStatus.connected) {
       if (disconnecting) return;
       setDisconnecting(true);
       try {
@@ -95,7 +94,13 @@ export function Sidebar() {
           method: 'POST'
         });
         if (!response.ok) throw new Error('Failed to disconnect Gmail');
-        setGmailStatus({ connected: false });
+        setSession((prev) => {
+          const nextProfile = prev?.profile ?? null;
+          return {
+            gmail: { connected: false },
+            profile: nextProfile
+          };
+        });
         if (typeof window !== 'undefined') {
           localStorage.removeItem('plutoOnboarded');
           window.location.href = '/login';
@@ -111,7 +116,7 @@ export function Sidebar() {
   }
 
   const displayName =
-    profile?.preferredName || profile?.fullName || localIdentity.name || gmailStatus?.name || 'Operator';
+    profile?.preferredName || profile?.fullName || localIdentity.name || gmailStatus.name || 'Operator';
   const initials = (displayName || 'P')
     .split(' ')
     .map((token) => token.charAt(0))
@@ -124,21 +129,8 @@ export function Sidebar() {
       <div className="sidebar-root">
         <div>
           <h1>PLUTO</h1>
-          {/* <p className="text-accent">Operator Console</p> */}
         </div>
-      {/* <section className="sidebar-section">
-        <h2>Profile</h2>
-        <button
-          className="profile-launch"
-          type="button"
-          onClick={() => setIsProfileOpen(true)}
-          disabled={profileLoading}
-        >
-          {profileLoading ? 'Loading…' : 'Open Profile'}
-        </button>
-      </section> */}
         <section className="sidebar-section">
-          {/* <h2>Connections</h2> */}
           <div className="connections-grid">
             <button
               type="button"
@@ -157,7 +149,6 @@ export function Sidebar() {
             <div className="profile-avatar">{initials || 'P'}</div>
             <div>
               <p className="profile-identity-name">{displayName}</p>
-              {/* <small className="text-muted">{profile?.role || profile?.company || 'View profile'}</small> */}
             </div>
           </button>
         </section>
@@ -165,13 +156,13 @@ export function Sidebar() {
       {isProfileOpen && (
         <ProfileModal
           profile={profile}
-          loading={profileLoading}
+          loading={sessionLoading}
           gmailStatus={gmailStatus}
           gmailLoading={gmailLoading}
           onGmailAction={handleGmailAction}
           onOpenBespoke={() => setIsBespokeMemoryModalOpen(true)}
           onClose={() => setIsProfileOpen(false)}
-          onProfileUpdated={(nextProfile) => setProfile(nextProfile)}
+          onProfileUpdated={handleProfileUpdated}
         />
       )}
       {isBespokeMemoryModalOpen && (

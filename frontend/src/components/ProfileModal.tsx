@@ -1,51 +1,24 @@
 'use client';
 
 import { useState } from 'react';
+import type {
+  GmailStatus,
+  ProfileHistoryEntry,
+  ProfileNote,
+  UserProfile
+} from '@/lib/session';
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
 
-export interface ProfileNote {
-  text?: string;
-  timestamp?: string | null;
-}
-
-export interface ProfileHistoryEntry {
-  value?: string | null;
-  timestamp?: string | null;
-}
-
-export interface ProfileInfo {
-  fullName?: string;
-  preferredName?: string;
-  timezone?: string;
-  contactEmail?: string;
-  phone?: string;
-  company?: string;
-  role?: string;
-  biography?: string;
-  customData?: {
-    notes?: (string | ProfileNote)[];
-    previousValues?: Record<string, ProfileHistoryEntry[]>;
-    [key: string]: unknown;
-  };
-}
-
-interface GmailStatus {
-  connected: boolean;
-  email?: string;
-  avatarUrl?: string;
-  name?: string;
-}
-
 interface ProfileModalProps {
-  profile: ProfileInfo | null;
+  profile: UserProfile | null;
   loading: boolean;
   gmailStatus: GmailStatus | null;
   gmailLoading: boolean;
   onGmailAction: () => void;
   onOpenBespoke: () => void;
   onClose: () => void;
-  onProfileUpdated: (profile: ProfileInfo | null) => void;
+  onProfileUpdated: (profile: UserProfile | null) => void;
 }
 
 const TABS: Array<{ id: 'profile' | 'connections' | 'history'; label: string }> = [
@@ -367,16 +340,12 @@ export function ProfileModal({
       <div className="profile-modal" onClick={(evt) => evt.stopPropagation()}>
         <div className="profile-modal-header">
           <div>
-            <p className="profile-name">{profile?.preferredName ?? profile?.fullName ?? 'User profile'}</p>
             {profile?.role && profile?.company && (
               <p className="text-muted">
                 {profile.role} @ {profile.company}
               </p>
             )}
           </div>
-          <button className="profile-close" type="button" onClick={onClose}>
-            Close
-          </button>
         </div>
         <div className="profile-modal-body-grid">
           <aside className="profile-tabs">
@@ -392,6 +361,11 @@ export function ProfileModal({
             ))}
           </aside>
           <div className="profile-tab-content">{renderActiveContent()}</div>
+        </div>
+        <div className="profile-modal-footer">
+          <button className="profile-done-btn" type="button" onClick={onClose}>
+            Done
+          </button>
         </div>
       </div>
     </div>

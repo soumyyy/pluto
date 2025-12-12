@@ -391,7 +391,36 @@ export async function getUserProfile(userId: string) {
     if (result.rowCount === 0) {
       return null;
     }
-    return result.rows[0];
+    const profile = result.rows[0] as {
+      customData?: {
+        notes?: Array<string | { text?: string; timestamp?: string | null }>;
+        [key: string]: unknown;
+      };
+    };
+    if (profile?.customData?.notes) {
+      const seen = new Set<string>();
+      const sanitized: Array<{ text: string; timestamp: string | null }> = [];
+      profile.customData.notes.forEach((entry) => {
+        if (!entry) return;
+        if (typeof entry === 'string') {
+          const key = `${entry}-null`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          sanitized.push({ text: entry, timestamp: null });
+          return;
+        }
+        const text = typeof entry.text === 'string' ? entry.text : null;
+        if (!text) return;
+        const timestamp =
+          typeof entry.timestamp === 'string' ? entry.timestamp : entry.timestamp === null ? null : null;
+        const key = `${text}-${timestamp ?? 'null'}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        sanitized.push({ text, timestamp });
+      });
+      profile.customData.notes = sanitized;
+    }
+    return profile;
   } finally {
     client.release();
   }
@@ -419,6 +448,41 @@ export async function upsertUserProfile(userId: string, data: Record<string, unk
     const incomingCustom = (data.customData ?? data.custom_data ?? {}) as Record<string, unknown>;
     const existingCustom = (existing.custom_data ?? {}) as Record<string, unknown>;
     const mergedCustom = { ...existingCustom, ...incomingCustom };
+    type NoteEntry = { text: string; timestamp?: string | null };
+    const normalizeNotes = (value: unknown): NoteEntry[] => {
+      if (!Array.isArray(value)) return [];
+      const result: NoteEntry[] = [];
+      value.forEach((entry) => {
+        if (typeof entry === 'string') {
+          result.push({ text: entry, timestamp: null });
+          return;
+        }
+        if (entry && typeof entry === 'object' && 'text' in entry) {
+          const maybe = entry as { text?: unknown; timestamp?: unknown };
+          if (typeof maybe.text === 'string') {
+            result.push({
+              text: maybe.text,
+              timestamp: typeof maybe.timestamp === 'string' ? maybe.timestamp : null
+            });
+          }
+        }
+      });
+      return result;
+    };
+    const existingNotes = normalizeNotes(existingCustom.notes);
+    const incomingNotes = normalizeNotes(incomingCustom.notes);
+    const notesProvided = Object.prototype.hasOwnProperty.call(incomingCustom, 'notes');
+    if (notesProvided) {
+      if (incomingNotes.length > 0) {
+        mergedCustom.notes = incomingNotes;
+      } else {
+        delete mergedCustom.notes;
+      }
+    } else if (existingNotes.length > 0) {
+      mergedCustom.notes = existingNotes;
+    } else {
+      delete mergedCustom.notes;
+    }
     const preferences = data.preferences ?? existing.preferences ?? null;
 
     await client.query(

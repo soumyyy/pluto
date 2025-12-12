@@ -5,6 +5,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { GoogleSignInButton } from '@/components/login/GoogleSignInButton';
 import { OnboardingPrompt, type OnboardingQuestion } from '@/components/login/OnboardingPrompt';
 import { VideoBackground } from '@/components/login/VideoBackground';
+import {
+  cacheProfileLocally,
+  fetchSessionSnapshot,
+  hasActiveSession,
+  type UserProfile
+} from '@/lib/session';
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
 
@@ -41,20 +47,13 @@ export default function LoginPage() {
       if (typeof window === 'undefined') return;
       const hasLocalProfile = localStorage.getItem('plutoOnboarded') === 'true';
       try {
-        const [gmailResponse, profileResponse] = await Promise.all([
-          fetch(`${GATEWAY_URL}/api/gmail/status`),
-          fetch(`${GATEWAY_URL}/api/profile`)
-        ]);
-        const gmailData = gmailResponse.ok ? await gmailResponse.json() : { connected: false };
-        const profileData = profileResponse.ok ? await profileResponse.json() : { profile: null };
-        if (gmailData.connected && profileData.profile && !cancelled) {
-          localStorage.setItem('plutoProfileName', profileData.profile.fullName ?? '');
-          localStorage.setItem('plutoProfileNote', profileData.profile.customData?.personalNote ?? '');
-          localStorage.setItem('plutoOnboarded', 'true');
+        const snapshot = await fetchSessionSnapshot();
+        if (!cancelled && hasActiveSession(snapshot)) {
+          cacheProfileLocally(snapshot.profile);
           router.replace('/');
           return;
         }
-        if (hasLocalProfile && gmailData.connected && !cancelled) {
+        if (hasLocalProfile && snapshot.gmail.connected && !cancelled) {
           router.replace('/');
         }
       } catch {
@@ -75,6 +74,20 @@ export default function LoginPage() {
       if (popupRef.current && !popupRef.current.closed) popupRef.current.close();
     };
   }, []);
+
+  const completeSigninIfProfileExists = useCallback(async () => {
+    try {
+      const snapshot = await fetchSessionSnapshot();
+      if (snapshot.profile) {
+        cacheProfileLocally(snapshot.profile);
+        router.replace('/');
+        return true;
+      }
+    } catch {
+      // swallow, fall back to onboarding
+    }
+    return false;
+  }, [router]);
 
   const handleGoogleSignIn = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -103,14 +116,17 @@ export default function LoginPage() {
           if (popupRef.current && !popupRef.current.closed) {
             popupRef.current.close();
           }
-          setStage('onboarding');
+          const alreadyProfiled = await completeSigninIfProfileExists();
+          if (!alreadyProfiled) {
+            setStage('onboarding');
+          }
           setAuthLoading(false);
         }
       } catch {
         // swallow
       }
     }, 2500);
-  }, []);
+  }, [completeSigninIfProfileExists]);
 
   const handleResponseChange = useCallback((id: string, value: string) => {
     setResponses((prev) => ({ ...prev, [id]: value }));
