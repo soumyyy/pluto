@@ -1,6 +1,15 @@
 'use client';
 
-import { useEffect, useState, useRef, ChangeEvent, DragEvent, useCallback, useMemo } from 'react';
+import {
+  useEffect,
+  useState,
+  useRef,
+  ChangeEvent,
+  DragEvent,
+  useCallback,
+  useMemo,
+  memo
+} from 'react';
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
 const FILE_GRAPH_LIMIT = 320;
 
@@ -78,8 +87,11 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
   const [graphLoading, setGraphLoading] = useState(true);
   const [graphError, setGraphError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const handleOpenFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
   const [dragActive, setDragActive] = useState(false);
-  const allowedExtensions = ['.md'];
+  const allowedExtensions = useMemo(() => ['.md'], []);
 
   async function loadStatus() {
     try {
@@ -222,6 +234,14 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
     }
   }
 
+  const handleResetSelection = useCallback(() => {
+    setFileQueue([]);
+    setUploadStage('idle');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, []);
+
   async function handleReindex(ingestionId: string) {
     setActionLoading(ingestionId);
     try {
@@ -290,144 +310,40 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
         <div className="profile-modal-body">
           <div className="memory-columns">
             <div className="memory-left-column">
-              <section>
-                <h3>Upload Local Folder</h3>
-                <div className={`memory-dropzone ${dragActive ? 'active' : ''}`} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
-                  <input
-                    type="file"
-                    multiple
-                    ref={fileInputRef}
-                    // allow folder selection when supported
-                    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                    // @ts-ignore
-                    webkitdirectory="true"
-                    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-                    // @ts-ignore
-                    directory="true"
-                    onChange={handleFileChange}
-                    accept={allowedExtensions.join(',')}
-                  />
-                  {uploadStage === 'confirm' && fileQueue.length > 0 && (
-                    <div className="memory-confirmation">
-                      <p>Upload {fileQueue.length} Markdown file{fileQueue.length === 1 ? '' : 's'}?</p>
-                      <ul className="memory-file-queue">
-                        {fileQueue.slice(0, 6).map((file) => (
-                          <li key={file.name}>{file.name}</li>
-                        ))}
-                        {fileQueue.length > 6 && <li>+ {fileQueue.length - 6} more</li>}
-                      </ul>
-                      <div className="memory-actions">
-                        <button type="button" className="memory-upload-btn primary" onClick={handleUpload} disabled={isUploading}>
-                          {isUploading ? 'Uploading…' : 'Confirm'}
-                        </button>
-                        <button
-                          type="button"
-                          className="memory-upload-btn secondary"
-                          onClick={() => {
-                            setFileQueue([]);
-                            setUploadStage('idle');
-                            if (fileInputRef.current) fileInputRef.current.value = '';
-                          }}
-                          disabled={isUploading}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {uploadStage === 'uploading' && (
-                    <div className="memory-upload-progress">
-                      <div className="progress-track">
-                        <div className="progress-value active" style={{ width: '60%' }} />
-                      </div>
-                      <p>Uploading…</p>
-                    </div>
-                  )}
-                  {uploadStage !== 'confirm' && uploadStage !== 'uploading' && statusData && statusData.status !== 'uploaded' && statusData.status !== 'failed' && (
-                    <MemoryProgress status={statusData} />
-                  )}
-                  {uploadStage !== 'uploading' && statusData && statusData.status === 'failed' && (
-                    <p className="profile-error">{statusData.error || 'Ingestion failed'}</p>
-                  )}
-                  {uploadStage === 'idle' && statusLoading && (
-                    <p className="text-muted">Checking status…</p>
-                  )}
-                  {uploadStage === 'idle' && !statusLoading && (!statusData || statusData.status === 'uploaded' || statusData.status === 'failed') && (
-                    <>
-                      <p>Drop Markdown files or click Upload.</p>
-                      <button type="button" className="memory-upload-btn primary" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
-                        Upload
-                      </button>
-                    </>
-                  )}
-                </div>
-                {uploadError && <p className="profile-error">{uploadError}</p>}
-              </section>
-              <section>
-                <div className="memory-history-header">
-                  <h3>History</h3>
-                  {history.length > 0 && (
-                    <button
-                      type="button"
-                      className="memory-upload-btn secondary"
-                      onClick={handleClearAll}
-                      disabled={clearingAll}
-                    >
-                      {clearingAll ? 'Clearing…' : 'Clear All'}
-                    </button>
-                  )}
-                </div>
-                {historyLoading ? (
-                  <p className="text-muted">Loading history…</p>
-                ) : history.length === 0 ? (
-                  <p className="text-muted">No uploads yet.</p>
-                ) : (
-                  <ul className="memory-history-list">
-                    {history.map((item) => (
-                      <li key={item.id} className="memory-history-item">
-                        <div>
-                          <p className="memory-history-title">{item.batchName || `${item.totalFiles} file${item.totalFiles === 1 ? '' : 's'}`}</p>
-                          <small>{item.statusLabel} · {new Date(item.createdAt).toLocaleString()}</small>
-                        </div>
-                        <div className="memory-history-actions">
-                          {/* Re-index button commented out per request */}
-                          {/* {item.status === 'uploaded' && (
-                            <button
-                              type="button"
-                              className="memory-upload-btn secondary"
-                              onClick={() => handleReindex(item.id)}
-                              disabled={actionLoading === item.id}
-                            >
-                              {actionLoading === item.id ? 'Queueing…' : 'Re-index'}
-                            </button>
-                          )} */}
-                          <button
-                            type="button"
-                            className="memory-upload-btn secondary"
-                            onClick={() => handleDelete(item.id)}
-                            disabled={actionLoading === item.id}
-                          >
-                            {actionLoading === item.id ? 'Removing…' : 'Delete'}
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
+              <UploadSection
+                dragActive={dragActive}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                fileInputRef={fileInputRef}
+                onFileChange={handleFileChange}
+                allowedExtensions={allowedExtensions}
+                uploadStage={uploadStage}
+                fileQueue={fileQueue}
+                isUploading={isUploading}
+                onUpload={handleUpload}
+                onOpenPicker={handleOpenFilePicker}
+                onCancelSelection={handleResetSelection}
+                uploadError={uploadError}
+                statusData={statusData}
+                statusLoading={statusLoading}
+              />
+              <HistorySection
+                history={history}
+                historyLoading={historyLoading}
+                clearingAll={clearingAll}
+                onClearAll={handleClearAll}
+                onDelete={handleDelete}
+                actionLoadingId={actionLoading}
+              />
             </div>
             <div className="memory-right-column">
               <section className="memory-graph-section">
-            <div className="memory-history-header">
-              <h3>Graph View</h3>
-              {/* <small>All uploads</small> */}
-            </div>
-            <MemoryGraphPanel
-              graph={graphData}
-              loading={graphLoading}
-              error={graphError}
-            />
-          </section>
+                <div className="memory-history-header">
+                  <h3>Graph View</h3>
+                 </div>
+                 <MemoryGraphPanel graph={graphData} loading={graphLoading} error={graphError} />
+               </section>
             </div>
           </div>
         </div>
@@ -454,7 +370,185 @@ function MemoryProgress({ status }: { status: BespokeStatus }) {
   );
 }
 
-function MemoryGraphPanel({
+interface UploadSectionProps {
+  dragActive: boolean;
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDragLeave: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+  fileInputRef: React.RefObject<HTMLInputElement>;
+  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  allowedExtensions: string[];
+  uploadStage: UploadStage;
+  fileQueue: { name: string; size: number }[];
+  isUploading: boolean;
+  onUpload: () => void;
+  onOpenPicker: () => void;
+  onCancelSelection: () => void;
+  uploadError: string | null;
+  statusData: BespokeStatus | null;
+  statusLoading: boolean;
+}
+
+const UploadSection = memo(function UploadSection({
+  dragActive,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  fileInputRef,
+  onFileChange,
+  allowedExtensions,
+  uploadStage,
+  fileQueue,
+  isUploading,
+  onUpload,
+  onOpenPicker,
+  onCancelSelection,
+  uploadError,
+  statusData,
+  statusLoading
+}: UploadSectionProps) {
+  return (
+    <section>
+      <h3>Upload Local Folder</h3>
+      <div
+        className={`memory-dropzone ${dragActive ? 'active' : ''}`}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        <input
+          type="file"
+          multiple
+          ref={fileInputRef}
+          // allow folder selection when supported
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          webkitdirectory="true"
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
+          directory="true"
+          onChange={onFileChange}
+          accept={allowedExtensions.join(',')}
+        />
+        {uploadStage === 'confirm' && fileQueue.length > 0 && (
+          <div className="memory-confirmation">
+            <p>
+              Upload {fileQueue.length} Markdown file{fileQueue.length === 1 ? '' : 's'}?
+            </p>
+            <ul className="memory-file-queue">
+              {fileQueue.slice(0, 6).map((file) => (
+                <li key={file.name}>{file.name}</li>
+              ))}
+              {fileQueue.length > 6 && <li>+ {fileQueue.length - 6} more</li>}
+            </ul>
+            <div className="memory-actions">
+              <button type="button" className="memory-upload-btn primary" onClick={onUpload} disabled={isUploading}>
+                {isUploading ? 'Uploading…' : 'Confirm'}
+              </button>
+              <button
+                type="button"
+                className="memory-upload-btn secondary"
+                onClick={onCancelSelection}
+                disabled={isUploading}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {uploadStage === 'uploading' && (
+          <div className="memory-upload-progress">
+            <div className="progress-track">
+              <div className="progress-value active" style={{ width: '60%' }} />
+            </div>
+            <p>Uploading…</p>
+          </div>
+        )}
+        {uploadStage !== 'confirm' &&
+          uploadStage !== 'uploading' &&
+          statusData &&
+          statusData.status !== 'uploaded' &&
+          statusData.status !== 'failed' && <MemoryProgress status={statusData} />}
+        {uploadStage !== 'uploading' && statusData && statusData.status === 'failed' && (
+          <p className="profile-error">{statusData.error || 'Ingestion failed'}</p>
+        )}
+        {uploadStage === 'idle' && statusLoading && <p className="text-muted">Checking status…</p>}
+        {uploadStage === 'idle' && !statusLoading && (!statusData || statusData.status === 'uploaded' || statusData.status === 'failed') && (
+          <>
+            <p>Drop Markdown files or click Upload.</p>
+            <button type="button" className="memory-upload-btn primary" onClick={onOpenPicker} disabled={isUploading}>
+              Upload
+            </button>
+          </>
+        )}
+      </div>
+      {uploadError && <p className="profile-error">{uploadError}</p>}
+    </section>
+  );
+});
+
+interface HistorySectionProps {
+  history: BespokeStatus[];
+  historyLoading: boolean;
+  clearingAll: boolean;
+  onClearAll: () => void;
+  onDelete: (ingestionId: string) => void;
+  actionLoadingId: string | null;
+}
+
+const HistorySection = memo(function HistorySection({
+  history,
+  historyLoading,
+  clearingAll,
+  onClearAll,
+  onDelete,
+  actionLoadingId
+}: HistorySectionProps) {
+  return (
+    <section>
+      <div className="memory-history-header">
+        <h3>History</h3>
+        {history.length > 0 && (
+          <button type="button" className="memory-upload-btn secondary" onClick={onClearAll} disabled={clearingAll}>
+            {clearingAll ? 'Clearing…' : 'Clear All'}
+          </button>
+        )}
+      </div>
+      {historyLoading ? (
+        <p className="text-muted">Loading history…</p>
+      ) : history.length === 0 ? (
+        <p className="text-muted">No uploads yet.</p>
+      ) : (
+        <ul className="memory-history-list">
+          {history.map((item) => (
+            <li key={item.id} className="memory-history-item">
+              <div>
+                <p className="memory-history-title">
+                  {item.batchName || `${item.totalFiles} file${item.totalFiles === 1 ? '' : 's'}`}
+                </p>
+                <small>
+                  {item.statusLabel} · {new Date(item.createdAt).toLocaleString()}
+                </small>
+              </div>
+              <div className="memory-history-actions">
+                <button
+                  type="button"
+                  className="memory-upload-btn secondary"
+                  onClick={() => onDelete(item.id)}
+                  disabled={actionLoadingId === item.id}
+                >
+                  {actionLoadingId === item.id ? 'Removing…' : 'Delete'}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+});
+
+const MemoryGraphPanel = memo(function MemoryGraphPanel({
   graph,
   loading,
   error
@@ -494,7 +588,7 @@ function MemoryGraphPanel({
       </div>
     </div>
   );
-}
+});
 
 interface PositionedFileNode extends FileGraphNode {
   x: number;
@@ -520,7 +614,7 @@ function computeFileGraphLayout(graph: FileGraphResponse | null): FileGraphLayou
     const bucket = groupedByIngestion.get(node.ingestionId) ?? [];
     bucket.push(node);
     groupedByIngestion.set(node.ingestionId, bucket);
-  });
+});
   const baseRadius = 120;
   const radiusStep = 120;
   const colorPalette = ['#7dd3fc', '#f472b6', '#a78bfa', '#facc15', '#34d399', '#fb7185'];
