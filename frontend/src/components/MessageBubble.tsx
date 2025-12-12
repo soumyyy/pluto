@@ -1,3 +1,5 @@
+import { MarkdownRenderer } from './MarkdownRenderer';
+
 interface Source {
   title: string;
   url: string;
@@ -35,7 +37,7 @@ export function MessageBubble({
             <span />
           </div>
         ) : (
-          <p className="message-text">{content}</p>
+          <MarkdownRenderer content={content} />
         )}
         {/* <span className="message-label">{isUser ? 'USER' : 'PLUTO'}</span> */}
         {renderSources && !isPlaceholder && (
