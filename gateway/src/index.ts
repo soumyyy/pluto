@@ -5,9 +5,10 @@ import { config } from './config';
 import chatRouter from './routes/chat';
 import gmailRouter from './routes/gmail';
 import profileRouter from './routes/profile';
-import { scheduleGmailJobs } from './jobs/gmailJobs';
 import memoryRouter from './routes/memory';
 import graphRouter from './routes/graph';
+import { scheduleGmailJobs } from './jobs/gmailJobs';
+import { attachUserContext } from './middleware/userContext';
 // import { graphqlHTTP } from 'express-graphql';
 // import { schema } from './graphql/schema';
 // import { rootValue } from './graphql/resolvers';
@@ -17,6 +18,7 @@ const app = express();
 app.use(cors({ origin: config.frontendOrigin, credentials: true }));
 app.use(express.json());
 app.use(cookieParser(config.sessionSecret));
+app.use(attachUserContext);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });

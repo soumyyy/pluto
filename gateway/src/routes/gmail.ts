@@ -9,7 +9,7 @@ import {
 } from '../services/db';
 import { fetchRecentThreads, getGmailProfile, NO_GMAIL_TOKENS, fetchThreadBody } from '../services/gmailClient';
 import { embedEmailText } from '../services/embeddings';
-import { TEST_USER_ID } from '../constants';
+import { requireUserId } from '../utils/request';
 
 const router = Router();
 const DEFAULT_LOOKBACK_HOURS = 48;
@@ -22,6 +22,7 @@ function formatDateForQuery(date: Date) {
 }
 
 router.get('/connect', (req, res) => {
+  requireUserId(req);
   const state = req.query.state?.toString() || 'Eclipsn-dev';
   const authUrl = getAuthUrl(state);
   return res.redirect(authUrl);
@@ -32,12 +33,13 @@ router.get('/callback', async (req, res) => {
   if (!code || typeof code !== 'string') {
     return res.status(400).send('Missing code parameter');
   }
+  const userId = requireUserId(req);
 
   try {
     const tokens = await exchangeCodeForTokens(code);
     const expiry = new Date(Date.now() + tokens.expires_in * 1000);
     await saveGmailTokens({
-      userId: TEST_USER_ID,
+      userId,
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiry
@@ -55,8 +57,9 @@ router.get('/threads', async (req, res) => {
   const importanceOnly = req.query.importance_only === 'true';
   const lookbackHours = parseInt(req.query.hours as string, 10) || DEFAULT_LOOKBACK_HOURS;
   const startDate = new Date(Date.now() - lookbackHours * 60 * 60 * 1000);
+  const userId = requireUserId(req);
   try {
-    const { threads } = await fetchRecentThreads(TEST_USER_ID, maxResults, {
+    const { threads } = await fetchRecentThreads(userId, maxResults, {
       importanceOnly,
       startDate: formatDateForQuery(startDate)
     });
@@ -81,9 +84,10 @@ router.get('/threads', async (req, res) => {
   }
 });
 
-router.get('/status', async (_req, res) => {
+router.get('/status', async (req, res) => {
+  const userId = requireUserId(req);
   try {
-    const profile = await getGmailProfile(TEST_USER_ID);
+    const profile = await getGmailProfile(userId);
     return res.json({ connected: true, email: profile.email, avatarUrl: profile.avatarUrl, name: profile.name });
   } catch (error) {
     if (error instanceof Error && error.message === NO_GMAIL_TOKENS) {
@@ -94,15 +98,16 @@ router.get('/status', async (_req, res) => {
   }
 });
 
-router.post('/disconnect', async (_req, res) => {
+router.post('/disconnect', async (req, res) => {
+  const userId = requireUserId(req);
   try {
-    const tokens = await getGmailTokens(TEST_USER_ID);
+    const tokens = await getGmailTokens(userId);
     if (tokens?.accessToken) {
       await revokeToken(tokens.accessToken);
     } else if (tokens?.refreshToken) {
       await revokeToken(tokens.refreshToken);
     }
-    await deleteGmailTokens(TEST_USER_ID);
+    await deleteGmailTokens(userId);
     return res.json({ status: 'disconnected' });
   } catch (error) {
     console.error('Failed to disconnect Gmail', error);
@@ -124,12 +129,13 @@ router.post('/threads/full-sync', async (req, res) => {
     return res.status(400).json({ error: 'Window must be positive and at most 1 year' });
   }
 
+  const userId = requireUserId(req);
   try {
     let pageToken: string | undefined;
     let synced = 0;
     const categoryCounts: Record<string, number> = {};
     do {
-      const result = await fetchRecentThreads(TEST_USER_ID, 1000, {
+      const result = await fetchRecentThreads(userId, 1000, {
         maxResults: 1000,
         startDate,
         endDate,
@@ -156,9 +162,10 @@ router.post('/threads/full-sync', async (req, res) => {
 
 export default router;
 
-router.post('/threads/cleanup', async (_req, res) => {
+router.post('/threads/cleanup', async (req, res) => {
+  const userId = requireUserId(req);
   try {
-    await removeExpiredGmailThreads(TEST_USER_ID);
+    await removeExpiredGmailThreads(userId);
     return res.json({ status: 'ok' });
   } catch (error) {
     console.error('Gmail cleanup failed', error);
@@ -171,9 +178,10 @@ router.post('/threads/search', async (req, res) => {
   if (!query) {
     return res.status(400).json({ error: 'query is required' });
   }
+  const userId = requireUserId(req);
   try {
     const embedding = await embedEmailText(query);
-    const matches = await searchGmailEmbeddings({ userId: TEST_USER_ID, embedding, limit: limit ?? 5 });
+    const matches = await searchGmailEmbeddings({ userId, embedding, limit: limit ?? 5 });
     return res.json({ threads: matches });
   } catch (error) {
     console.error('Semantic gmail search failed', error);
@@ -186,8 +194,9 @@ router.post('/threads/search', async (req, res) => {
 
 router.get('/threads/:threadId', async (req, res) => {
   const threadId = req.params.threadId;
+  const userId = requireUserId(req);
   try {
-    const detail = await fetchThreadBody(TEST_USER_ID, threadId);
+    const detail = await fetchThreadBody(userId, threadId);
     return res.json(detail);
   } catch (error) {
     if (error instanceof Error && error.message === 'Thread not found') {

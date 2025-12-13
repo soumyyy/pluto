@@ -9,8 +9,7 @@ import {
   type UserProfile
 } from '@/lib/profile';
 import type { GmailStatus } from '@/lib/session';
-
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+import { gatewayFetch } from '@/lib/gatewayFetch';
 
 interface ProfileModalProps {
   onGmailAction: () => void;
@@ -130,7 +129,7 @@ export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActio
       editableKeys.forEach((key) => {
         payload[key] = profileDraft[key] ?? '';
       });
-      const response = await fetch(`${GATEWAY_URL}/api/profile`, {
+      const response = await gatewayFetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -179,7 +178,7 @@ export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActio
     setIsSubmitting(true);
     setError(null);
     try {
-      const response = await fetch(`${GATEWAY_URL}/api/profile`, {
+      const response = await gatewayFetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,12 +1,13 @@
 import { Router } from 'express';
-import { TEST_USER_ID } from '../constants';
 import { getUserProfile, upsertUserProfile } from '../services/db';
+import { requireUserId } from '../utils/request';
 
 const router = Router();
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
+  const userId = requireUserId(req);
   try {
-    const profile = await getUserProfile(TEST_USER_ID);
+    const profile = await getUserProfile(userId);
     return res.json({ profile });
   } catch (error) {
     console.error('Failed to load profile', error);
@@ -16,9 +17,10 @@ router.get('/', async (_req, res) => {
 
 router.post('/', async (req, res) => {
   const update = req.body ?? {};
+  const userId = requireUserId(req);
   try {
-    await upsertUserProfile(TEST_USER_ID, update);
-    const profile = await getUserProfile(TEST_USER_ID);
+    await upsertUserProfile(userId, update);
+    const profile = await getUserProfile(userId);
     return res.json({ profile });
   } catch (error) {
     console.error('Failed to update profile', error);

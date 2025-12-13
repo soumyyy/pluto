@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Pool, PoolClient } from 'pg';
 import { config } from '../config';
 import { GraphEdgeType, GraphNodeType, makeEdgeId, makeNodeId, parseNodeId } from '../graph/types';
@@ -11,6 +12,16 @@ const pool = new Pool({
       }
     : undefined
 });
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUUID(value: string | undefined | null): value is string {
+  return typeof value === 'string' && UUID_REGEX.test(value);
+}
+
+function placeholderEmailFor(userId: string): string {
+  return `user+${userId.replace(/[^0-9a-zA-Z]/g, '')}@demo.local`;
+}
 
 export async function saveGmailTokens(params: {
   userId: string;
@@ -170,6 +181,20 @@ export async function searchGmailEmbeddings(params: {
   }
 }
 
+export async function listUsersWithGmailTokens(): Promise<string[]> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `SELECT DISTINCT user_id
+         FROM gmail_tokens
+        WHERE expiry IS NULL OR expiry > NOW() - INTERVAL '5 minutes'`
+    );
+    return result.rows.map((row) => row.user_id as string);
+  } finally {
+    client.release();
+  }
+}
+
 export async function upsertGmailThreadBody(params: {
   userId: string;
   threadRowId: string;
@@ -311,6 +336,26 @@ export async function insertMessage(params: {
 
 export function getPool() {
   return pool;
+}
+
+export async function ensureUserRecord(
+  requestedId?: string
+): Promise<{ userId: string; created: boolean }> {
+  const userId = isValidUUID(requestedId) ? requestedId : randomUUID();
+  const email = placeholderEmailFor(userId);
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `INSERT INTO users (id, email)
+       VALUES ($1, $2)
+       ON CONFLICT (id) DO NOTHING`,
+      [userId, email]
+    );
+    const inserted = result.rowCount ?? 0;
+    return { userId, created: inserted > 0 };
+  } finally {
+    client.release();
+  }
 }
 
 export async function getUserProfile(userId: string) {

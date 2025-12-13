@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { TEST_USER_ID } from '../constants';
 import { GraphNodeType, GraphEdgeType } from '../graph/types';
 import { fetchGraphSlice, fetchGraphNeighborhood } from '../services/db';
+import { requireUserId } from '../utils/request';
 
 const router = Router();
 
@@ -32,10 +32,11 @@ router.get('/slice', async (req, res) => {
   const edgeLimit = req.query.edgeLimit ? Number(req.query.edgeLimit) : undefined;
   const nodeTypes = parseNodeTypes(req.query.types);
   const edgeTypes = parseEdgeTypes(req.query.edgeTypes);
+  const userId = requireUserId(req);
 
   try {
     const result = await fetchGraphSlice({
-      userId: TEST_USER_ID,
+      userId,
       sliceId,
       ingestionId,
       nodeTypes,
@@ -58,6 +59,7 @@ router.get('/node/:id', async (req, res) => {
   const nodeTypes = parseNodeTypes(req.query.nodeTypes);
   const edgeTypes = parseEdgeTypes(req.query.edgeTypes);
   const ingestionId = typeof req.query.ingestionId === 'string' ? req.query.ingestionId : undefined;
+  const userId = requireUserId(req);
 
   if (!nodeId) {
     return res.status(400).json({ error: 'Node ID required' });
@@ -65,7 +67,7 @@ router.get('/node/:id', async (req, res) => {
 
   try {
     const result = await fetchGraphNeighborhood({
-      userId: TEST_USER_ID,
+      userId,
       centerId: nodeId,
       depth,
       nodeTypes,

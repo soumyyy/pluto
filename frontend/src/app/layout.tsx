@@ -6,7 +6,7 @@ export const metadata = {
   title: 'Eclipsn',
   description: 'Personal agent for long-term knowledge and Gmail',
   icons: {
-    icon: '/Eclipsnlogo.png'
+    icon: '/Plutologo.png'
   }
 };
 

@@ -7,6 +7,7 @@ import { OnboardingPrompt, type OnboardingQuestion } from '@/components/login/On
 import { VideoBackground } from '@/components/login/VideoBackground';
 import { useSessionContext } from '@/components/SessionProvider';
 import { hasActiveSession } from '@/lib/session';
+import { gatewayFetch } from '@/lib/gatewayFetch';
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
 
@@ -14,14 +15,12 @@ const QUESTIONS: OnboardingQuestion[] = [
   {
     id: 'fullName',
     label: 'What should Eclipsn call you?',
-    placeholder: 'Full name or callsign',
-    helperText: 'Optional — we use this to personalize responses.'
+    placeholder: 'Full name/callsign'
   },
   {
     id: 'personalNote',
     label: 'Anything specific you’d like Eclipsn to remember?',
-    placeholder: 'e.g. Favorite tone, dietary note, VIP clients',
-    helperText: 'Optional, but helps Eclipsn stay in character for you.'
+    placeholder: 'Optional, but something to start with...'
   }
 ];
 
@@ -40,14 +39,12 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (sessionLoading) return;
-    if (typeof window === 'undefined') return;
-    const hasLocalProfile = localStorage.getItem('EclipsnOnboarded') === 'true';
     if (session && hasActiveSession(session)) {
       router.replace('/');
       return;
     }
-    if (hasLocalProfile && session?.gmail.connected) {
-      router.replace('/');
+    if (session?.gmail.connected && !session?.profile) {
+      setStage((prev) => (prev === 'signin' ? 'onboarding' : prev));
     }
   }, [router, session, sessionLoading]);
 
@@ -128,7 +125,7 @@ export default function LoginPage() {
         };
       }
       if (Object.keys(payload).length > 0) {
-        await fetch(`${GATEWAY_URL}/api/profile`, {
+        await gatewayFetch('/api/profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -150,6 +147,19 @@ export default function LoginPage() {
   const handleEnterApp = useCallback(() => {
     router.push('/');
   }, [router]);
+
+  if (!sessionLoading && session && hasActiveSession(session)) {
+    return (
+      <div className="login-page">
+        <VideoBackground />
+        <div className="login-content">
+          <div className="login-card">
+            <p className="login-footnote">Redirecting to your console…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="login-page">
@@ -182,7 +192,7 @@ export default function LoginPage() {
                 Eclipsn synced your profile. You&apos;re ready to ingest bespoke memories and Gmail threads.
               </p>
               <button type="button" className="onboarding-btn primary" onClick={handleEnterApp} disabled={completing}>
-                Enter Operator Console
+                Enter Eclipsn
               </button>
             </div>
           )}

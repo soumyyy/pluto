@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { useSessionContext } from '@/components/SessionProvider';
 import type { GmailStatus } from '@/lib/session';
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+import { gatewayFetch } from '@/lib/gatewayFetch';
 const FILE_GRAPH_LIMIT = 320;
 
 interface BespokeMemoryModalProps {
@@ -99,7 +99,7 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
 
   async function loadStatus() {
     try {
-      const response = await fetch(`${GATEWAY_URL}/api/memory/status`);
+      const response = await gatewayFetch('/api/memory/status');
       if (!response.ok) throw new Error('Failed to load status');
       const data = await response.json();
       setStatusData(data.ingestion ?? null);
@@ -112,7 +112,7 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
 
   async function loadHistory(limit = 6) {
     try {
-      const response = await fetch(`${GATEWAY_URL}/api/memory/history?limit=${limit}`);
+      const response = await gatewayFetch(`/api/memory/history?limit=${limit}`);
       if (!response.ok) throw new Error('Failed to load history');
       const data = await response.json();
       setHistory(data.history ?? []);
@@ -126,11 +126,11 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
   const loadFileGraph = useCallback(async () => {
     setGraphLoading(true);
     setGraphError(null);
-    try {
-      const params = new URLSearchParams({
-        limit: String(FILE_GRAPH_LIMIT)
-      });
-      const response = await fetch(`${GATEWAY_URL}/api/memory/graph?${params.toString()}`);
+      try {
+        const params = new URLSearchParams({
+          limit: String(FILE_GRAPH_LIMIT)
+        });
+        const response = await gatewayFetch(`/api/memory/graph?${params.toString()}`);
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(payload.error || 'Failed to load file graph');
@@ -214,7 +214,7 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
         const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
         formData.append('paths', relativePath || file.name);
       });
-      const response = await fetch(`${GATEWAY_URL}/api/memory/upload`, {
+      const response = await gatewayFetch('/api/memory/upload', {
         method: 'POST',
         body: formData
       });
@@ -249,7 +249,7 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
   async function handleReindex(ingestionId: string) {
     setActionLoading(ingestionId);
     try {
-      const response = await fetch(`${GATEWAY_URL}/api/memory/${ingestionId}/reindex`, {
+      const response = await gatewayFetch(`/api/memory/${ingestionId}/reindex`, {
         method: 'POST'
       });
       if (!response.ok) throw new Error('Failed to queue re-index');
@@ -265,7 +265,7 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
   async function handleDelete(ingestionId: string) {
     setActionLoading(ingestionId);
     try {
-      const response = await fetch(`${GATEWAY_URL}/api/memory/${ingestionId}`, {
+      const response = await gatewayFetch(`/api/memory/${ingestionId}`, {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error('Failed to delete ingestion');
@@ -283,7 +283,7 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
     if (clearingAll) return;
     setClearingAll(true);
     try {
-      const response = await fetch(`${GATEWAY_URL}/api/memory`, {
+      const response = await gatewayFetch('/api/memory', {
         method: 'DELETE'
       });
       if (!response.ok) throw new Error('Failed to clear bespoke memories');

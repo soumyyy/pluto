@@ -1,7 +1,7 @@
-const BASE_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+import { gatewayFetch } from './gatewayFetch';
 
 export async function post(path: string, body: unknown) {
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await gatewayFetch(path, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'

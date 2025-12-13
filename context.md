@@ -3,7 +3,7 @@
 This document captures the current state of the project, major features implemented so far, and the key architectural decisions. It serves as a quick reference when planning new work (e.g., the graph-based RAG visualization).
 
 ## 1. High-Level Architecture
-- **Gateway (Node/Express + PostgreSQL):** handles OAuth flows, Gmail proxies, bespoke memory uploads, and coordination with the brain service.
+- **Gateway (Node/Express + PostgreSQL):** handles OAuth flows, Gmail proxies, bespoke memory uploads, and coordination with the brain service. Each browser session receives an httpOnly cookie that creates/identifies a `users` row so routes can operate per user instead of the former `TEST_USER_ID` constant.
 - **Brain (FastAPI/LangChain):** orchestrates the chat agent, retrieval (bespoke FAISS, Gmail semantic search, Tavily URL context), and tool calls (Gmail detail, profile_update, etc.).
 - **Frontend (Next.js/React):** hosts the chat UI, bespoke memory modal, and sidebar connections.
 

@@ -4,7 +4,6 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { promises as fsPromises } from 'node:fs';
 import crypto from 'node:crypto';
-import { TEST_USER_ID } from '../constants';
 import {
   createMemoryIngestion,
   getLatestMemoryIngestion,
@@ -21,6 +20,7 @@ import {
 } from '../services/db';
 import { triggerMemoryIndexing } from '../services/brainClient';
 import { GraphNodeType, GraphEdgeType } from '../graph/types';
+import { requireUserId } from '../utils/request';
 
 const router = Router();
 const upload = multer({
@@ -65,15 +65,16 @@ router.post('/upload', upload.array('files'), async (req, res) => {
     }
   }
 
+  const userId = requireUserId(req);
   try {
     const ingestionId = await createMemoryIngestion({
-      userId: TEST_USER_ID,
+      userId,
       source: 'bespoke_memory',
       totalFiles: files.length,
       batchName
     });
     await updateMemoryIngestion({ ingestionId, status: 'chunking', processedFiles: 0, chunkedFiles: 0, error: null });
-    processMemoryIngestion(files, relativePaths, ingestionId).catch((error) => {
+    processMemoryIngestion(files, relativePaths, ingestionId, userId).catch((error) => {
       console.error('Memory ingestion processing failed', error);
     });
 
@@ -112,9 +113,10 @@ function formatIngestion(record: any) {
   };
 }
 
-router.get('/status', async (_req, res) => {
+router.get('/status', async (req, res) => {
+  const userId = requireUserId(req);
   try {
-    const latest = await getLatestMemoryIngestion(TEST_USER_ID, 'bespoke_memory');
+    const latest = await getLatestMemoryIngestion(userId, 'bespoke_memory');
     if (!latest) {
       return res.json({ ingestion: null });
     }
@@ -127,8 +129,9 @@ router.get('/status', async (_req, res) => {
 
 router.get('/history', async (req, res) => {
   const limit = Number(req.query.limit) || 10;
+  const userId = requireUserId(req);
   try {
-    const rows = await listMemoryIngestions(TEST_USER_ID, limit);
+    const rows = await listMemoryIngestions(userId, limit);
     return res.json({ history: rows.map(formatIngestion) });
   } catch (error) {
     console.error('Failed to load ingestion history', error);
@@ -138,8 +141,9 @@ router.get('/history', async (req, res) => {
 
 router.post('/:ingestionId/reindex', async (req, res) => {
   const ingestionId = req.params.ingestionId;
+  const userId = requireUserId(req);
   try {
-    const record = await getMemoryIngestionById(ingestionId, TEST_USER_ID);
+    const record = await getMemoryIngestionById(ingestionId, userId);
     if (!record) {
       return res.status(404).json({ error: 'Ingestion not found.' });
     }
@@ -151,7 +155,7 @@ router.post('/:ingestionId/reindex', async (req, res) => {
       error: null,
       lastIndexedAt: null
     });
-    await triggerMemoryIndexing(TEST_USER_ID);
+    await triggerMemoryIndexing(userId);
     return res.json({ status: 'queued' });
   } catch (error) {
     console.error('Failed to reindex ingestion', error);
@@ -161,9 +165,10 @@ router.post('/:ingestionId/reindex', async (req, res) => {
 
 router.delete('/:ingestionId', async (req, res) => {
   const ingestionId = req.params.ingestionId;
+  const userId = requireUserId(req);
   try {
-    await deleteMemoryIngestion(ingestionId, TEST_USER_ID);
-    await triggerMemoryIndexing(TEST_USER_ID);
+    await deleteMemoryIngestion(ingestionId, userId);
+    await triggerMemoryIndexing(userId);
     return res.json({ status: 'deleted' });
   } catch (error) {
     console.error('Failed to delete ingestion', error);
@@ -171,10 +176,11 @@ router.delete('/:ingestionId', async (req, res) => {
   }
 });
 
-router.delete('/', async (_req, res) => {
+router.delete('/', async (req, res) => {
+  const userId = requireUserId(req);
   try {
-    await clearAllMemoryIngestions(TEST_USER_ID, 'bespoke_memory');
-    await triggerMemoryIndexing(TEST_USER_ID);
+    await clearAllMemoryIngestions(userId, 'bespoke_memory');
+    await triggerMemoryIndexing(userId);
     return res.json({ status: 'cleared' });
   } catch (error) {
     console.error('Failed to clear bespoke memories', error);
@@ -184,8 +190,9 @@ router.delete('/', async (_req, res) => {
 
 router.get('/graph', async (req, res) => {
   const limit = req.query.limit ? Number(req.query.limit) : undefined;
+  const userId = requireUserId(req);
   try {
-    const files = await listMemoryFileNodes(TEST_USER_ID, limit ?? 400);
+    const files = await listMemoryFileNodes(userId, limit ?? 400);
     const nodeKeyMap = new Map<string, string>();
     const groupedByIngestion = new Map<string, MemoryFileRecord[]>();
     files.forEach((file) => {
@@ -251,13 +258,14 @@ router.get('/:ingestionId/graph', async (req, res) => {
   const edgeTypes = edgeTypesParam
     ? (edgeTypesParam.split(',').map((token) => token.trim().toUpperCase()) as GraphEdgeType[])
     : undefined;
+  const userId = requireUserId(req);
   try {
-    const ingestion = await getMemoryIngestionById(ingestionId, TEST_USER_ID);
+    const ingestion = await getMemoryIngestionById(ingestionId, userId);
     if (!ingestion) {
       return res.status(404).json({ error: 'Ingestion not found.' });
     }
     const graph = await fetchGraphSlice({
-      userId: TEST_USER_ID,
+      userId,
       ingestionId,
       nodeTypes: [GraphNodeType.DOCUMENT, GraphNodeType.SECTION, GraphNodeType.CHUNK],
       edgeTypes,
@@ -273,7 +281,12 @@ router.get('/:ingestionId/graph', async (req, res) => {
 
 export default router;
 
-async function processMemoryIngestion(files: Express.Multer.File[], relativePaths: string[], ingestionId: string) {
+async function processMemoryIngestion(
+  files: Express.Multer.File[],
+  relativePaths: string[],
+  ingestionId: string,
+  userId: string
+) {
   let processed = 0;
   try {
     for (let index = 0; index < files.length; index += 1) {
@@ -286,7 +299,7 @@ async function processMemoryIngestion(files: Express.Multer.File[], relativePath
         for (const chunk of chunks) {
           await insertMemoryChunk({
             ingestionId,
-            userId: TEST_USER_ID,
+            userId,
             source: 'bespoke_memory',
             filePath: relPath,
             chunkIndex,
@@ -316,7 +329,7 @@ async function processMemoryIngestion(files: Express.Multer.File[], relativePath
       processedFiles: processed,
       chunkedFiles: processed
     });
-    await triggerMemoryIndexing(TEST_USER_ID);
+    await triggerMemoryIndexing(userId);
   } catch (error) {
     await updateMemoryIngestion({
       ingestionId,

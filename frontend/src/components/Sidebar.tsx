@@ -7,6 +7,7 @@ import { ModalPortal } from './ModalPortal';
 import { useSessionContext } from '@/components/SessionProvider';
 import type { GmailStatus } from '@/lib/session';
 import type { UserProfile } from '@/lib/profile';
+import { gatewayFetch } from '@/lib/gatewayFetch';
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
 
@@ -38,7 +39,7 @@ export function Sidebar() {
       if (disconnecting) return;
       setDisconnecting(true);
       try {
-        const response = await fetch(`${GATEWAY_URL}/api/gmail/disconnect`, {
+        const response = await gatewayFetch('/api/gmail/disconnect', {
           method: 'POST'
         });
         if (!response.ok) throw new Error('Failed to disconnect Gmail');

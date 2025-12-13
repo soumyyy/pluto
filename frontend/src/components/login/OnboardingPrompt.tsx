@@ -36,7 +36,7 @@ export function OnboardingPrompt({
 
   return (
     <div className="onboarding-card">
-      <div className="onboarding-image" />
+      {/* <div className="onboarding-image" /> */}
       <div className="onboarding-body">
         <div className="onboarding-progress">
           <div className="onboarding-progress-value" style={{ width: `${progress}%` }} />

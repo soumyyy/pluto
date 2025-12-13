@@ -5,8 +5,7 @@ import {
   normalizeProfileNotes,
   type UserProfile
 } from '@/lib/profile';
-
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+import { gatewayFetch } from './gatewayFetch';
 
 export type GmailStatus = {
   connected: boolean;
@@ -40,8 +39,8 @@ function normalizeProfile(payload: unknown): UserProfile | null {
 
 export async function fetchSessionSnapshot(): Promise<SessionSnapshot> {
   const [gmailResult, profileResult] = await Promise.allSettled([
-    fetch(`${GATEWAY_URL}/api/gmail/status`),
-    fetch(`${GATEWAY_URL}/api/profile`)
+    gatewayFetch('/api/gmail/status'),
+    gatewayFetch('/api/profile')
   ]);
 
   let gmailPayload: unknown = null;
