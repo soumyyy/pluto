@@ -379,7 +379,7 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
             </div>
           </div>
         </div>
-        <div className="profile-modal-footer">
+        <div className="bespoke-modal-footer">
           <button type="button" className="profile-done-btn" onClick={onClose}>
             Done
           </button>

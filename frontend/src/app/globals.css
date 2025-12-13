@@ -486,7 +486,7 @@ body {
 
 .profile-modal {
   width: 760px;
-  height: 540px;
+  height: 600px;
   overflow: hidden;
   background: #1f2025;
   border: 1px solid rgba(215, 206, 185, 0.4);
@@ -498,6 +498,11 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: flex-start;
+  position: relative;
+}
+
+.profile-modal.memory-modal {
   align-items: center;
 }
 
@@ -505,6 +510,7 @@ body {
   width: min(1040px, 95vw);
   height: 640px;
   overflow: hidden;
+  position: relative;
 }
 
 .profile-modal-header {
@@ -524,16 +530,46 @@ body {
   align-items: center;
 }
 
-.profile-modal-footer {
+/* Separate footer classes that don't inherit from profile-modal properties */
+.bespoke-modal-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px;
+  background: #1f2025;
+  border-top: 1px solid rgba(215, 206, 185, 0.1);
   display: flex;
-  gap: 5px;
   justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-modal-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px;
+  background: #1f2025;
+  border-top: 1px solid rgba(215, 206, 185, 0.1);
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 5px;
+  color: rgba(215, 206, 185, 0);
+}
+
+.footer-left {
+  display: flex;
+  gap: 8px;
   align-items: center;
 }
 
-.memory-modal .profile-modal-footer {
-  justify-content: flex-end;
-  align-items: flex-end;
+.footer-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .profile-contact-line {
@@ -824,8 +860,7 @@ body {
 .profile-tab-content {
   flex: 1;
   overflow-y: auto;
-  padding-left: 8px;
-  border-left: 1px solid rgba(215, 206, 185, 0.25);
+  width: 100%;
 }
 
 .profile-tab-stack section {
@@ -2105,7 +2140,7 @@ body {
 .memory-graph-section {
   border: none;
   border-radius: 12px;
-  padding: 14px;
+  padding: 0 14px 14px 14px;
   background: rgba(31, 32, 37, 0.7);
   min-height: 260px;
   margin-bottom: 0px;

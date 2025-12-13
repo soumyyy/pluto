@@ -511,25 +511,29 @@ export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActio
           </div>
         </div>
         <div className="profile-modal-footer">
-        <div className="profile-header-actions">
-            {isEditingProfile ? (
-              <>
-                <button type="button" className="profile-edit-btn secondary" onClick={handleProfileCancel} disabled={savingProfile}>
-                  Cancel
+          <div className="footer-left">
+            <div className="profile-header-actions">
+              {isEditingProfile ? (
+                <>
+                  <button type="button" className="profile-edit-btn secondary" onClick={handleProfileCancel} disabled={savingProfile}>
+                    Cancel
+                  </button>
+                  <button type="button" className="profile-edit-btn primary" onClick={handleProfileSave} disabled={savingProfile}>
+                    {savingProfile ? 'Saving…' : 'Save changes'}
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="profile-edit-btn primary" onClick={() => setIsEditingProfile(true)}>
+                  Edit
                 </button>
-                <button type="button" className="profile-edit-btn primary" onClick={handleProfileSave} disabled={savingProfile}>
-                  {savingProfile ? 'Saving…' : 'Save changes'}
-                </button>
-              </>
-            ) : (
-              <button type="button" className="profile-edit-btn primary" onClick={() => setIsEditingProfile(true)}>
-                Edit
-              </button>
-            )}
+              )}
+            </div>
           </div>
-          <button className="profile-done-btn" type="button" onClick={onClose}>
-            Done
-          </button>
+          <div className="footer-right">
+            <button className="profile-done-btn" type="button" onClick={onClose}>
+              Done
+            </button>
+          </div>
         </div>
       </div>
     </div>
