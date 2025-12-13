@@ -15,7 +15,7 @@ const pool = new Pool({
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function isValidUUID(value: string | undefined | null): value is string {
+export function isValidUUID(value: string | undefined | null): value is string {
   return typeof value === 'string' && UUID_REGEX.test(value);
 }
 
@@ -50,7 +50,11 @@ export async function getGmailTokens(userId: string) {
   const client = await pool.connect();
   try {
     const result = await client.query(
-      `SELECT access_token as "accessToken", refresh_token as "refreshToken", expiry
+      `SELECT access_token as "accessToken",
+              refresh_token as "refreshToken",
+              expiry,
+              initial_sync_started_at as "initialSyncStartedAt",
+              initial_sync_completed_at as "initialSyncCompletedAt"
        FROM gmail_tokens
        WHERE user_id = $1`,
       [userId]
@@ -62,8 +66,59 @@ export async function getGmailTokens(userId: string) {
     return {
       accessToken: row.accessToken as string,
       refreshToken: row.refreshToken as string,
-      expiry: row.expiry as Date
+      expiry: row.expiry as Date,
+      initialSyncStartedAt: row.initialSyncStartedAt as Date | null,
+      initialSyncCompletedAt: row.initialSyncCompletedAt as Date | null
     };
+  } finally {
+    client.release();
+  }
+}
+
+export interface GmailSyncMetadata {
+  initialSyncStartedAt: Date | null;
+  initialSyncCompletedAt: Date | null;
+}
+
+export async function getGmailSyncMetadata(userId: string): Promise<GmailSyncMetadata | null> {
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `SELECT initial_sync_started_at as "initialSyncStartedAt",
+              initial_sync_completed_at as "initialSyncCompletedAt"
+         FROM gmail_tokens
+        WHERE user_id = $1`,
+      [userId]
+    );
+    if (result.rowCount === 0) return null;
+    const row = result.rows[0];
+    return {
+      initialSyncStartedAt: row.initialSyncStartedAt as Date | null,
+      initialSyncCompletedAt: row.initialSyncCompletedAt as Date | null
+    };
+  } finally {
+    client.release();
+  }
+}
+
+export async function markInitialGmailSync(
+  userId: string,
+  options: { started?: boolean; completed?: boolean }
+): Promise<void> {
+  if (!options.started && !options.completed) return;
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `UPDATE gmail_tokens
+          SET initial_sync_started_at = CASE WHEN $2 THEN NOW() ELSE initial_sync_started_at END,
+              initial_sync_completed_at = CASE
+                  WHEN $3 THEN NOW()
+                  WHEN $2 THEN NULL
+                  ELSE initial_sync_completed_at
+              END
+        WHERE user_id = $1`,
+      [userId, options.started ? true : false, options.completed ? true : false]
+    );
   } finally {
     client.release();
   }
@@ -73,6 +128,32 @@ export async function deleteGmailTokens(userId: string) {
   const client = await pool.connect();
   try {
     await client.query(`DELETE FROM gmail_tokens WHERE user_id = $1`, [userId]);
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteUserAccount(userId: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM gmail_thread_embeddings WHERE user_id = $1`, [userId]);
+    await client.query(`DELETE FROM gmail_thread_bodies WHERE user_id = $1`, [userId]);
+    await client.query(`DELETE FROM gmail_threads WHERE user_id = $1`, [userId]);
+    await client.query(`DELETE FROM gmail_tokens WHERE user_id = $1`, [userId]);
+    await client.query(
+      `DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id = $1)`,
+      [userId]
+    );
+    await client.query(`DELETE FROM conversations WHERE user_id = $1`, [userId]);
+    await client.query(`DELETE FROM tasks WHERE user_id = $1`, [userId]);
+    await client.query(`DELETE FROM memory_ingestions WHERE user_id = $1`, [userId]);
+    await client.query(`DELETE FROM user_profiles WHERE user_id = $1`, [userId]);
+    await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
   } finally {
     client.release();
   }
@@ -336,6 +417,54 @@ export async function insertMessage(params: {
 
 export function getPool() {
   return pool;
+}
+
+export async function findOrCreateUserByGmailEmail(
+  gmailEmail: string
+): Promise<{ userId: string; created: boolean }> {
+  const client = await pool.connect();
+  try {
+    // First, try to find existing user by Gmail email in user_profiles custom_data
+    const existingUserResult = await client.query(
+      `SELECT u.id
+       FROM users u
+       JOIN user_profiles up ON u.id = up.user_id
+       WHERE up.custom_data->>'gmail_email' = $1 OR up.contact_email = $1`,
+      [gmailEmail]
+    );
+
+    if (existingUserResult.rows.length > 0) {
+      return { userId: existingUserResult.rows[0].id, created: false };
+    }
+
+    // If no existing user found, create a new one
+    const userId = randomUUID();
+    const placeholderEmail = placeholderEmailFor(userId);
+
+    await client.query('BEGIN');
+
+    // Insert user record
+    await client.query(
+      `INSERT INTO users (id, email) VALUES ($1, $2)`,
+      [userId, placeholderEmail]
+    );
+
+    // Insert basic profile with Gmail email in custom_data
+    await client.query(
+      `INSERT INTO user_profiles (user_id, custom_data, updated_at)
+       VALUES ($1, $2, NOW())`,
+      [userId, JSON.stringify({ gmail_email: gmailEmail })]
+    );
+
+    await client.query('COMMIT');
+
+    return { userId, created: true };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function ensureUserRecord(

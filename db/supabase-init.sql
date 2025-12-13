@@ -48,6 +48,8 @@ create table if not exists gmail_tokens (
     access_token text not null,
     refresh_token text not null,
     expiry timestamptz not null,
+    initial_sync_started_at timestamptz,
+    initial_sync_completed_at timestamptz,
     created_at timestamptz not null default now()
 );
 create index if not exists idx_gmail_tokens_user_id on gmail_tokens(user_id);

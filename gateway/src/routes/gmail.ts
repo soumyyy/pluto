@@ -1,25 +1,23 @@
 import { Router } from 'express';
+import { google } from 'googleapis';
 import { getAuthUrl, exchangeCodeForTokens, revokeToken } from '../services/gmailOAuth';
 import {
   saveGmailTokens,
   removeExpiredGmailThreads,
   searchGmailEmbeddings,
   getGmailTokens,
-  deleteGmailTokens
+  deleteGmailTokens,
+  findOrCreateUserByGmailEmail
 } from '../services/db';
 import { fetchRecentThreads, getGmailProfile, NO_GMAIL_TOKENS, fetchThreadBody } from '../services/gmailClient';
 import { embedEmailText } from '../services/embeddings';
 import { requireUserId } from '../utils/request';
+import { ensureInitialGmailSync, formatGmailDate } from '../jobs/gmailInitialSync';
+import { getGmailSyncMetadata } from '../services/db';
+import { config } from '../config';
 
 const router = Router();
 const DEFAULT_LOOKBACK_HOURS = 48;
-
-function formatDateForQuery(date: Date) {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  return `${year}/${month}/${day}`;
-}
 
 router.get('/connect', (req, res) => {
   requireUserId(req);
@@ -33,10 +31,35 @@ router.get('/callback', async (req, res) => {
   if (!code || typeof code !== 'string') {
     return res.status(400).send('Missing code parameter');
   }
-  const userId = requireUserId(req);
 
   try {
+    // First, exchange the code for tokens to get user info
     const tokens = await exchangeCodeForTokens(code);
+
+    // Get Gmail profile to identify the user
+    const oauth2Client = new google.auth.OAuth2(
+      config.googleClientId,
+      config.googleClientSecret,
+      config.googleRedirectUri
+    );
+
+    oauth2Client.setCredentials({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token
+    });
+
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const { data: userInfo } = await oauth2.userinfo.get();
+    const gmailEmail = userInfo.email;
+
+    if (!gmailEmail) {
+      return res.status(400).send('Failed to get Gmail email from OAuth response.');
+    }
+
+    // Find or create user based on Gmail email
+    const { userId, created: isNewUser } = await findOrCreateUserByGmailEmail(gmailEmail);
+
+    // Save Gmail tokens for this user
     const expiry = new Date(Date.now() + tokens.expires_in * 1000);
     await saveGmailTokens({
       userId,
@@ -44,6 +67,22 @@ router.get('/callback', async (req, res) => {
       refreshToken: tokens.refresh_token,
       expiry
     });
+
+    // Set session cookie for the user
+    res.cookie(config.sessionCookieName, userId, {
+      httpOnly: true,
+      sameSite: config.sessionCookieSameSite,
+      secure: config.sessionCookieSecure,
+      domain: config.sessionCookieDomain,
+      maxAge: 365 * 24 * 60 * 60 * 1000 // 1 year
+    });
+
+    // Start initial sync for new users
+    if (isNewUser) {
+      ensureInitialGmailSync(userId).catch((err) => {
+        console.error('Failed to run initial Gmail sync', err);
+      });
+    }
 
     return res.send('Gmail connected successfully. You can close this window.');
   } catch (error) {
@@ -61,7 +100,7 @@ router.get('/threads', async (req, res) => {
   try {
     const { threads } = await fetchRecentThreads(userId, maxResults, {
       importanceOnly,
-      startDate: formatDateForQuery(startDate)
+      startDate: formatGmailDate(startDate)
     });
     const importantCount = threads.filter((thread) => (thread.importanceScore ?? 0) >= 0).length;
     const promoCount = threads.length - importantCount;
@@ -88,7 +127,15 @@ router.get('/status', async (req, res) => {
   const userId = requireUserId(req);
   try {
     const profile = await getGmailProfile(userId);
-    return res.json({ connected: true, email: profile.email, avatarUrl: profile.avatarUrl, name: profile.name });
+    const syncMeta = await getGmailSyncMetadata(userId);
+    return res.json({
+      connected: true,
+      email: profile.email,
+      avatarUrl: profile.avatarUrl,
+      name: profile.name,
+      initialSyncStartedAt: syncMeta?.initialSyncStartedAt ?? null,
+      initialSyncCompletedAt: syncMeta?.initialSyncCompletedAt ?? null
+    });
   } catch (error) {
     if (error instanceof Error && error.message === NO_GMAIL_TOKENS) {
       return res.json({ connected: false });

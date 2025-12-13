@@ -12,6 +12,8 @@ export type GmailStatus = {
   email?: string;
   avatarUrl?: string;
   name?: string;
+  initialSyncStartedAt?: string | null;
+  initialSyncCompletedAt?: string | null;
 };
 
 export type SessionSnapshot = {
@@ -28,7 +30,11 @@ function normalizeGmailStatus(payload: unknown): GmailStatus {
     connected: Boolean(record.connected),
     email: typeof record.email === 'string' ? record.email : undefined,
     avatarUrl: typeof record.avatarUrl === 'string' ? record.avatarUrl : undefined,
-    name: typeof record.name === 'string' ? record.name : undefined
+    name: typeof record.name === 'string' ? record.name : undefined,
+    initialSyncStartedAt:
+      typeof record.initialSyncStartedAt === 'string' ? (record.initialSyncStartedAt as string) : null,
+    initialSyncCompletedAt:
+      typeof record.initialSyncCompletedAt === 'string' ? (record.initialSyncCompletedAt as string) : null
   };
 }
 

@@ -33,6 +33,10 @@ export function Sidebar() {
 
   const gmailStatus: GmailStatus = session?.gmail ?? { connected: false };
   const profile: UserProfile | null = session?.profile ?? null;
+  const initialSyncPending =
+    gmailStatus.connected &&
+    !!gmailStatus.initialSyncStartedAt &&
+    !gmailStatus.initialSyncCompletedAt;
 
   async function handleGmailAction() {
     if (gmailStatus.connected) {
@@ -102,6 +106,9 @@ export function Sidebar() {
               </div>
             </button>
           </div>
+          {initialSyncPending && (
+            <p className="text-muted connection-footnote">Setting up your eclipsn</p>
+          )}
         </section>
         <section className="profile-identity-card">
           <button type="button" className="profile-identity-button" onClick={() => setIsProfileOpen(true)}>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSessionContext } from '@/components/SessionProvider';
 import {
   normalizeProfileNotes,
@@ -18,17 +19,19 @@ interface ProfileModalProps {
   gmailActionPending: boolean;
 }
 
-const tabsOrder = ['profile', 'notes', 'connections', 'history'] as const;
+const tabsOrder = ['profile', 'notes', 'connections', 'history', 'settings'] as const;
 type TabId = (typeof tabsOrder)[number];
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'profile', label: 'Profile' },
   { id: 'notes', label: 'Notes' },
   { id: 'connections', label: 'Connections' },
-  { id: 'history', label: 'History' }
+  { id: 'history', label: 'History' },
+  { id: 'settings', label: 'Settings' }
 ];
 
 export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActionPending }: ProfileModalProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>('profile');
   const [activeNoteIndex, setActiveNoteIndex] = useState<number | null>(null);
   const [editingNoteIndex, setEditingNoteIndex] = useState<number | null>(null);
@@ -37,6 +40,9 @@ export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActio
   const [error, setError] = useState<string | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const { session, loading, updateProfile } = useSessionContext();
   const profile: UserProfile | null = session?.profile ?? null;
   const gmailStatus: GmailStatus | null = session?.gmail ?? null;
@@ -226,6 +232,32 @@ export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActio
     setEditingNoteIndex(null);
     setDraftNoteText('');
     setError(null);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmationText !== 'delete account') return;
+
+    setIsDeletingAccount(true);
+    try {
+      const response = await gatewayFetch('/api/profile/account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete account');
+      }
+
+      // Account deleted successfully, redirect to login
+      router.push('/login');
+    } catch (err) {
+      console.error('Failed to delete account', err);
+      setError('Failed to delete account. Please try again.');
+      setShowDeleteConfirmation(false);
+      setDeleteConfirmationText('');
+    } finally {
+      setIsDeletingAccount(false);
+    }
   };
 
   const renderProfileContent = () => {
@@ -435,10 +467,31 @@ export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActio
     );
   };
 
+  const renderSettingsContent = () => {
+    return (
+      <section className="profile-settings">
+        <div className="profile-settings-danger-zone">
+          <h4>Danger Zone</h4>
+          <p className="text-muted">
+            Once you delete your account, there is no going back. Please be certain.
+          </p>
+          <button
+            type="button"
+            className="profile-delete-account-btn"
+            onClick={() => setShowDeleteConfirmation(true)}
+          >
+            Delete Account
+          </button>
+        </div>
+      </section>
+    );
+  };
+
   const renderActiveContent = () => {
     if (activeTab === 'connections') return renderConnectionsContent();
     if (activeTab === 'notes') return renderNotesContent();
     if (activeTab === 'history') return renderHistoryContent();
+    if (activeTab === 'settings') return renderSettingsContent();
     return renderProfileContent();
   };
 
@@ -481,8 +534,51 @@ export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActio
   };
 
   return (
-    <div className="profile-modal-overlay" onClick={onClose}>
-      <div className="profile-modal" onClick={(evt) => evt.stopPropagation()}>
+    <>
+      {showDeleteConfirmation && (
+        <div className="delete-confirmation-overlay" onClick={() => setShowDeleteConfirmation(false)}>
+          <div className="delete-confirmation-dialog" onClick={(evt) => evt.stopPropagation()}>
+            <h3>Delete Account</h3>
+            <p className="text-muted">
+              This action cannot be undone. This will permanently delete your account and remove all of your data from our servers.
+            </p>
+            <p className="delete-warning">
+              Please type <strong>delete account</strong> to confirm:
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmationText}
+              onChange={(e) => setDeleteConfirmationText(e.target.value)}
+              placeholder="Type 'delete account' here"
+              className="delete-confirmation-input"
+              autoFocus
+            />
+            <div className="delete-confirmation-actions">
+              <button
+                type="button"
+                className="delete-confirmation-cancel"
+                onClick={() => {
+                  setShowDeleteConfirmation(false);
+                  setDeleteConfirmationText('');
+                }}
+                disabled={isDeletingAccount}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="delete-confirmation-confirm"
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmationText !== 'delete account' || isDeletingAccount}
+              >
+                {isDeletingAccount ? 'Deleting…' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="profile-modal-overlay" onClick={onClose}>
+        <div className="profile-modal" onClick={(evt) => evt.stopPropagation()}>
         <div className="profile-modal-header">
           <div>
             {profile && (profile.role || profile.company) && (
@@ -536,5 +632,6 @@ export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActio
         </div>
       </div>
     </div>
+    </>
   );
 }

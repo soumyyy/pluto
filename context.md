@@ -21,7 +21,7 @@ This document captures the current state of the project, major features implemen
 
 ### Gmail Integration
 - OAuth + token refresh (Gmail).
-- Thread ingestion (`fetchRecentThreads`) + embedding storage (`gmail_thread_embeddings`).
+- Thread ingestion (`fetchRecentThreads`) + embedding storage (`gmail_thread_embeddings`). First-time Gmail connections trigger an automatic year-long backfill so users see “Eclipsn is learning” while historical mail is indexed.
 - `/api/gmail/threads` now defaults to a 48h lookback window (override via `?hours=`) and returns meta counts (total/important/promotions + window hours) so “recent email” summaries always have enough context.
 - Semantic search endpoint returns structured JSON (subject, snippet, sender, link, timestamp).
 - Brain merges Gmail snippets with bespoke memories via Reciprocal Rank Fusion (`search_memories_tool`).
