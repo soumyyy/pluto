@@ -53,6 +53,14 @@ body {
   margin-top: 16px;
 }
 
+.sidebar-section .connection-subtitle {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(215, 206, 185, 0.65);
+}
+
 .sidebar-section h2 {
   font-size: 11px;
   letter-spacing: 0.4em;
@@ -402,7 +410,7 @@ body {
 }
 
 .profile-identity-card {
-  margin-top: auto;
+  margin-top: 0;
 }
 
 .profile-identity-button {
@@ -483,10 +491,14 @@ body {
   background: #1f2025;
   border: 1px solid rgba(215, 206, 185, 0.4);
   border-radius: 12px;
-  padding: 0px 5px;
+  padding: 5px;
+  padding-top: 5px;
+  padding-bottom: 5px;
   box-shadow: 0 0 30px rgba(215, 206, 185, 0.2);
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .memory-modal {
@@ -498,10 +510,11 @@ body {
 .profile-modal-header {
   display: flex;
   justify-content: flex-start;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   margin-bottom: 12px;
   padding-left: 8px;
+  flex-wrap: wrap;
 }
 
 .profile-header-actions {
@@ -509,6 +522,18 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.profile-modal-footer {
+  display: flex;
+  gap: 5px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.memory-modal .profile-modal-footer {
+  justify-content: flex-end;
+  align-items: flex-end;
 }
 
 .profile-contact-line {
@@ -725,6 +750,8 @@ body {
   color: rgba(255, 255, 255, 0.8);
   min-width: 120px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
 }
 
 .profile-edit-btn.primary {
@@ -932,13 +959,6 @@ body {
   border-radius: 999px;
 }
 
-.profile-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 16px 16px;
-  gap: 8px;
-  background: linear-gradient(180deg, rgba(23, 24, 28, 0), rgba(23, 24, 28, 0.85));
-}
 
 .profile-done-btn {
   border: 1px solid rgba(215, 206, 185, 0.4);
@@ -1155,7 +1175,7 @@ body {
 }
 
 .connection-button.memory {
-  border-style: dashed;
+  border-style: ridge ;
 }
 
 .connection-button:disabled {
@@ -1186,18 +1206,76 @@ body {
   display: none;
 }
 
-.memory-columns {
+ .memory-columns {
   display: grid;
   grid-template-columns: minmax(320px, 360px) minmax(360px, 1fr);
   gap: 20px;
   align-items: flex-start;
+  height: 100%;
+  padding-left: 10px;
+  padding-right: 10px;
 }
+
+.profile-modal-body.memory-empty-layout {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.memory-columns.empty-grid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
 
 .memory-left-column,
 .memory-right-column {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.memory-left-column.empty {
+  align-items: center;
+  text-align: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.memory-left-column.empty > * {
+  width: 100%;
+  max-width: 340px;
+}
+
+.memory-left-column.empty .memory-dropzone {
+  width: 100%;
+  max-width: 340px;
+}
+
+.memory-empty-state {
+  border: 1px solid rgba(215, 206, 185, 0.3);
+  border-radius: 12px;
+  padding: 18px;
+  background: rgba(23, 24, 28, 0.8);
+  line-height: 1.6;
+  color: rgba(215, 206, 185, 0.85);
+  margin-bottom: 18px;
+  max-width: 320px;
+}
+
+.memory-empty-state p {
+  margin: 0 0 6px;
+  display: flex;
+  flex-wrap: wrap;
+  text-align: left;
+  font-size: 14px;
+}
+
+.memory-empty-state p:last-child {
+  margin-bottom: 0;
 }
 
 @media (max-width: 1100px) {
@@ -2020,3 +2098,32 @@ body {
   align-items: center;
   gap: 8px;
 }
+
+.chathistory {
+  height: 600px;
+}
+.memory-graph-section {
+  border: none;
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(31, 32, 37, 0.7);
+  min-height: 260px;
+  margin-bottom: 0px;
+}
+
+.memory-graph-placeholder {
+  border: 1px dashed rgba(215, 206, 185, 0.4);
+  border-radius: 10px;
+  padding: 18px;
+  text-align: center;
+  color: rgba(215, 206, 185, 0.75);
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.memory-graph-section.hidden {
+  display: none;
+}
+

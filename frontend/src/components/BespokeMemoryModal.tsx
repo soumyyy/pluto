@@ -300,12 +300,17 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
     }
   }
 
+  const hasUploads =
+    history.length > 0 ||
+    Boolean(statusData && (statusData.totalFiles > 0 || statusData.chunkedFiles > 0 || statusData.indexedChunks > 0));
+  const showEmptyState = !hasUploads && uploadStage === 'idle' && fileQueue.length === 0;
+
   return (
     <div className="profile-modal-overlay" onClick={onClose}>
       <div className="profile-modal memory-modal" onClick={(evt) => evt.stopPropagation()}>
         <div className="profile-modal-header">
           <div>
-            <p className="profile-name">Bespoke Memory</p>
+            <p className="profile-name">Index</p>
             {/* <p
               className={`gmail-state ${gmailStatus.connected ? 'connected' : 'disconnected'}`}
             >
@@ -315,9 +320,16 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
             </p> */}
           </div>
         </div>
-        <div className="profile-modal-body">
-          <div className="memory-columns">
-            <div className="memory-left-column">
+        <div className={`profile-modal-body ${showEmptyState ? 'memory-empty-layout' : ''}`}>
+          <div className={`memory-columns ${showEmptyState ? 'empty-grid' : ''}`}>
+            <div className={`memory-left-column ${showEmptyState ? 'empty' : ''}`}>
+              {showEmptyState && (
+                <div className="memory-empty-state">
+                  <p>This is your personal knowledge space.</p>
+                  <p>Upload journals, notes, or writing so the system understands how you think.</p>
+                  <p>Everything stays private and grounds responses in your reality.</p>
+                </div>
+              )}
               <UploadSection
                 dragActive={dragActive}
                 onDragOver={handleDragOver}
@@ -336,22 +348,34 @@ export function BespokeMemoryModal({ onClose }: BespokeMemoryModalProps) {
                 statusData={statusData}
                 statusLoading={statusLoading}
               />
-              <HistorySection
-                history={history}
-                historyLoading={historyLoading}
-                clearingAll={clearingAll}
-                onClearAll={handleClearAll}
-                onDelete={handleDelete}
-                actionLoadingId={actionLoading}
-              />
+              {(hasUploads || historyLoading) && (
+                <HistorySection
+                  history={history}
+                  historyLoading={historyLoading}
+                  clearingAll={clearingAll}
+                  onClearAll={handleClearAll}
+                  onDelete={handleDelete}
+                  actionLoadingId={actionLoading}
+                />
+              )}
             </div>
             <div className="memory-right-column">
-              <section className="memory-graph-section">
+              <section className={`memory-graph-section ${showEmptyState ? 'hidden' : ''}`}>
                 <div className="memory-history-header">
                   <h3>Graph View</h3>
-                 </div>
-                 <MemoryGraphPanel graph={graphData} loading={graphLoading} error={graphError} />
-               </section>
+                </div>
+                {graphLoading ? (
+                  <div className="memory-graph-placeholder">
+                    <p>Building your knowledge map…</p>
+                  </div>
+                ) : graphData && graphData.nodes.length > 0 ? (
+                  <MemoryGraphPanel graph={graphData} loading={graphLoading} error={graphError} />
+                ) : (
+                  <div className="memory-graph-placeholder">
+                    <p>Your knowledge map appears after your first upload.</p>
+                  </div>
+                )}
+              </section>
             </div>
           </div>
         </div>

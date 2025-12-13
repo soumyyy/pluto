@@ -82,16 +82,22 @@ export function Sidebar() {
         <div>
           <h1>Eclipsn</h1>
         </div>
-        <section className="sidebar-section">
+        <section>
+          <div className='chathistory'>
+            <p>History</p>
+          </div>
+        </section>
+        <section className="profile-identity-card">
           <div className="connections-grid">
+            {/* <p className="connection-subtitle">Your bespoke knowledge</p> */}
             <button
               type="button"
               className="connection-button memory"
               onClick={() => setIsBespokeMemoryModalOpen(true)}
             >
               <div>
-                <p className="connection-title">Bespoke Memory</p>
-                <p className="text-muted connection-subtitle">Ingest your memories.</p>
+                <p className="connection-title">Index</p>
+                <p className="text-muted connection-subtitle">Your Bespoke Archive</p>
               </div>
             </button>
           </div>
