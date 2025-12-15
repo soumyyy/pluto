@@ -3,6 +3,7 @@ import { Pool, PoolClient } from 'pg';
 import { config } from '../config';
 import { GraphEdgeType, GraphNodeType, makeEdgeId, makeNodeId, parseNodeId } from '../graph/types';
 import { normalizeProfileNotes } from '../utils/profile';
+import { decryptSecret, encryptSecret, EncryptedSecret } from '../utils/crypto';
 
 const pool = new Pool({
   connectionString: config.databaseUrl,
@@ -29,18 +30,22 @@ export async function saveGmailTokens(params: {
   refreshToken: string;
   expiry: Date;
 }) {
-  // TODO: encrypt tokens at rest.
   await ensureUserRecord(params.userId);
+  const encryptedAccess = encryptSecret(params.accessToken);
+  const encryptedRefresh = encryptSecret(params.refreshToken);
   const client = await pool.connect();
   try {
     await client.query(
-      `INSERT INTO gmail_tokens (id, user_id, access_token, refresh_token, expiry)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4)
+      `INSERT INTO gmail_tokens (id, user_id, access_token, refresh_token, expiry, access_token_enc, refresh_token_enc, token_key_id)
+       VALUES (gen_random_uuid(), $1, NULL, NULL, $2, $3::jsonb, $4::jsonb, $5)
        ON CONFLICT (user_id)
-       DO UPDATE SET access_token = EXCLUDED.access_token,
-                     refresh_token = EXCLUDED.refresh_token,
+       DO UPDATE SET access_token = NULL,
+                     refresh_token = NULL,
+                     access_token_enc = EXCLUDED.access_token_enc,
+                     refresh_token_enc = EXCLUDED.refresh_token_enc,
+                     token_key_id = EXCLUDED.token_key_id,
                      expiry = EXCLUDED.expiry`,
-      [params.userId, params.accessToken, params.refreshToken, params.expiry]
+      [params.userId, params.expiry, JSON.stringify(encryptedAccess), JSON.stringify(encryptedRefresh), encryptedAccess.keyId]
     );
   } finally {
     client.release();
@@ -53,6 +58,9 @@ export async function getGmailTokens(userId: string) {
     const result = await client.query(
       `SELECT access_token as "accessToken",
               refresh_token as "refreshToken",
+              access_token_enc as "accessTokenEnc",
+              refresh_token_enc as "refreshTokenEnc",
+              token_key_id as "tokenKeyId",
               expiry,
               initial_sync_started_at as "initialSyncStartedAt",
               initial_sync_completed_at as "initialSyncCompletedAt"
@@ -64,9 +72,34 @@ export async function getGmailTokens(userId: string) {
       return null;
     }
     const row = result.rows[0];
+    let accessToken: string | null = null;
+    let refreshToken: string | null = null;
+    try {
+      accessToken = decryptSecret(row.accessTokenEnc as EncryptedSecret | null);
+      refreshToken = decryptSecret(row.refreshTokenEnc as EncryptedSecret | null);
+    } catch (error) {
+      console.error('[gmail] Failed to decrypt tokens, removing credentials', error);
+      await deleteGmailTokens(userId);
+      return null;
+    }
+    if ((!accessToken || !refreshToken) && (row.accessToken || row.refreshToken)) {
+      accessToken = row.accessToken as string;
+      refreshToken = row.refreshToken as string;
+      if (accessToken && refreshToken) {
+        await saveGmailTokens({
+          userId,
+          accessToken,
+          refreshToken,
+          expiry: row.expiry as Date
+        });
+      }
+    }
+    if (!accessToken || !refreshToken) {
+      return null;
+    }
     return {
-      accessToken: row.accessToken as string,
-      refreshToken: row.refreshToken as string,
+      accessToken,
+      refreshToken,
       expiry: row.expiry as Date,
       initialSyncStartedAt: row.initialSyncStartedAt as Date | null,
       initialSyncCompletedAt: row.initialSyncCompletedAt as Date | null

@@ -1,5 +1,5 @@
 import { fetchRecentThreads, NO_GMAIL_TOKENS } from '../services/gmailClient';
-import { getGmailSyncMetadata, markInitialGmailSync } from '../services/db';
+import { getGmailSyncMetadata, markInitialGmailSync, getGmailTokens } from '../services/db';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INITIAL_SYNC_LOOKBACK_DAYS = parseInt(process.env.GMAIL_INITIAL_SYNC_DAYS || '365', 10);
@@ -12,6 +12,10 @@ export function formatGmailDate(date: Date): string {
 }
 
 export async function ensureInitialGmailSync(userId: string): Promise<void> {
+  const tokens = await getGmailTokens(userId);
+  if (!tokens) {
+    return;
+  }
   const metadata = await getGmailSyncMetadata(userId);
   if (metadata?.initialSyncCompletedAt) {
     return;

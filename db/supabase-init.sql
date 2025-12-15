@@ -45,11 +45,16 @@ create index if not exists idx_messages_conversation_id on messages(conversation
 create table if not exists gmail_tokens (
     id uuid primary key default gen_random_uuid(),
     user_id uuid not null unique references users(id),
-    access_token text not null,
-    refresh_token text not null,
+    access_token text,
+    refresh_token text,
     expiry timestamptz not null,
     initial_sync_started_at timestamptz,
     initial_sync_completed_at timestamptz,
+    initial_sync_total_threads integer,
+    initial_sync_synced_threads integer,
+    access_token_enc jsonb,
+    refresh_token_enc jsonb,
+    token_key_id text,
     created_at timestamptz not null default now()
 );
 create index if not exists idx_gmail_tokens_user_id on gmail_tokens(user_id);

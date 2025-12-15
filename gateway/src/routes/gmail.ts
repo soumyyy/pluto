@@ -7,13 +7,15 @@ import {
   searchGmailEmbeddings,
   getGmailTokens,
   deleteGmailTokens,
-  findOrCreateUserByGmailEmail
+  findOrCreateUserByGmailEmail,
+  getGmailSyncMetadata,
+  getUserProfile,
+  markInitialGmailSync
 } from '../services/db';
 import { fetchRecentThreads, getGmailProfile, NO_GMAIL_TOKENS, fetchThreadBody } from '../services/gmailClient';
 import { embedEmailText } from '../services/embeddings';
 import { getUserId, requireUserId } from '../utils/request';
 import { ensureInitialGmailSync, formatGmailDate } from '../jobs/gmailInitialSync';
-import { getGmailSyncMetadata, getUserProfile } from '../services/db';
 import { config } from '../config';
 import { attachGmailIdentity, establishSession, ensureSessionUser } from '../services/userService';
 import { generatePopupResponse } from '../utils/popupResponse';
@@ -189,6 +191,10 @@ router.get('/status', async (req, res) => {
     return res.json({ connected: false });
   }
   try {
+    const tokens = await getGmailTokens(userId);
+    if (!tokens) {
+      return res.json({ connected: false });
+    }
     const profile = await getGmailProfile(userId);
     const syncMeta = await getGmailSyncMetadata(userId);
     return res.json({
@@ -237,6 +243,12 @@ router.post('/disconnect', async (req, res) => {
     
     // Delete tokens from database
     await deleteGmailTokens(userId);
+    await markInitialGmailSync(userId, {
+      started: false,
+      completed: false,
+      totalThreads: 0,
+      syncedThreads: 0
+    });
     
     console.log('[Gmail Disconnect] Gmail successfully disconnected for user:', userId);
     return res.json({ status: 'disconnected', timestamp: new Date().toISOString() });

@@ -1,40 +1,76 @@
 import session from 'express-session';
+import { RedisStore } from 'connect-redis';
+import { createClient } from 'redis';
 import { config } from '../config';
 
-/**
- * Production session management using express-session
- * Replaces 200+ lines of custom JWT code with proven solution
- */
+function createRedisClient() {
+  if (!config.redisUrl) {
+    return null;
+  }
+
+  const client = createClient({
+    url: config.redisUrl,
+    password: config.redisToken || undefined,
+    socket: config.redisUseTls
+      ? {
+          tls: true,
+          rejectUnauthorized: false
+        }
+      : undefined
+  });
+
+  client.on('error', (err) => {
+    console.error('[session] Redis error', err);
+  });
+
+  client
+    .connect()
+    .then(() => console.log('[session] Redis connected'))
+    .catch((error) => console.error('[session] Redis connection failed', error));
+
+  return client;
+}
+
+const redisClient = createRedisClient();
+if (!redisClient) {
+  console.warn('[session] Redis URL not configured, falling back to in-memory sessions');
+}
+const store =
+  redisClient &&
+  new RedisStore({
+    client: redisClient,
+    prefix: config.sessionStorePrefix
+  });
 
 export const sessionConfig = session({
   name: config.sessionCookieName,
   secret: config.sessionSecret,
   resave: false,
   saveUninitialized: false,
+  store,
   cookie: {
-    secure: false, // Fix: Disable secure cookies for development
+    secure: config.sessionCookieSecure,
     httpOnly: true,
     maxAge: config.sessionMaxAge,
-    sameSite: 'lax', // Fix: Use 'lax' for development compatibility
-    domain: config.isProduction ? config.sessionCookieDomain : 'localhost', // Fix: Share cookies across localhost subdomains
-  },
-  // In production: add Redis store here
-  // store: new RedisStore({ client: redisClient })
+    sameSite: config.sessionCookieSameSite,
+    domain: config.sessionCookieDomain
+  }
 });
 
-/**
- * Simple session helpers - no complex fingerprinting needed
- */
 export const sessionHelpers = {
   setUserId: (req: any, userId: string) => {
     req.session.userId = userId;
   },
-  
+
   getUserId: (req: any): string | undefined => {
     return req.session?.userId;
   },
-  
+
   destroySession: (req: any, callback?: (err?: any) => void) => {
-    req.session.destroy(callback || (() => {}));
-  },
+    if (req.session) {
+      req.session.destroy(callback || (() => {}));
+    } else if (callback) {
+      callback();
+    }
+  }
 };

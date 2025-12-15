@@ -18,8 +18,14 @@ function validateEnvironment() {
     if (!process.env.DATABASE_URL) {
       errors.push('DATABASE_URL is required in production');
     }
+    if (!process.env.GMAIL_TOKEN_ENC_KEY || process.env.GMAIL_TOKEN_ENC_KEY.length < 32) {
+      errors.push('GMAIL_TOKEN_ENC_KEY is required in production (32+ hex characters)');
+    }
     if (!isHttps) {
       console.warn('⚠️  HTTPS not detected in production - cookies may not work properly');
+    }
+    if (!process.env.UPSTASH_REDIS_URL && !process.env.REDIS_URL) {
+      console.warn('⚠️  Redis URL not configured; sessions will be in-memory only');
     }
   }
   
@@ -61,6 +67,9 @@ export const config = {
   brainServiceUrl: process.env.BRAIN_SERVICE_URL || 'http://localhost:8000',
   frontendOrigin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000',
   internalApiKey: process.env.INTERNAL_API_KEY || '',
+  redisUrl: process.env.UPSTASH_REDIS_URL || process.env.REDIS_URL || '',
+  redisToken: process.env.UPSTASH_REDIS_TOKEN || process.env.REDIS_TOKEN || '',
+  redisUseTls: (process.env.REDIS_TLS ?? 'true').toLowerCase() !== 'false',
   
   // Database configuration
   databaseUrl: process.env.DATABASE_URL || '',
@@ -83,7 +92,11 @@ export const config = {
   sessionCookieSameSite: resolveSameSite(),
   sessionCookieSameSiteOverride: process.env.USER_COOKIE_SAMESITE as 'strict' | 'lax' | 'none' | undefined,
   sessionCookieSecure: process.env.USER_COOKIE_SECURE === 'true' || (isProduction && isHttps),
+  sessionStorePrefix: process.env.SESSION_STORE_PREFIX || 'eclipsn:',
   
+  gmailTokenEncKey: process.env.GMAIL_TOKEN_ENC_KEY || '',
+  gmailTokenKeyId: process.env.GMAIL_TOKEN_KEY_ID || 'v1',
+
   // URL validation whitelist
   allowedOrigins: [
     process.env.FRONTEND_ORIGIN || 'http://localhost:3000',

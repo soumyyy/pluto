@@ -34,9 +34,11 @@ Browser → Gateway (`/api/chat`) → Brain (`/chat`) → tools (memory + Gmail 
 4. Provision a database:
    - **Local**: `docker-compose up -d postgres` and apply the schema with `psql $DATABASE_URL -f db/schema.sql`.
    - **Supabase**: create a project, enable the `pgvector` extension, and run `db/supabase-init.sql` from the Supabase SQL editor. Copy the connection string (ensure it ends with `?sslmode=require`) into `DATABASE_URL`.
-5. Set `INTERNAL_API_KEY` (gateway) and `GATEWAY_INTERNAL_SECRET` (brain) so internal service-to-service calls can specify `user_id` without cookies.
+5. Set `UPSTASH_REDIS_URL` (or `REDIS_URL`) so the gateway can persist sessions. For Upstash, copy the rediss URL/token and set `UPSTASH_REDIS_TOKEN`. In production, also set `USER_COOKIE_SECURE=true` and `USER_COOKIE_SAMESITE=strict`.
+6. Generate a 32-byte hex `GMAIL_TOKEN_ENC_KEY` (e.g., `openssl rand -hex 32`). The gateway encrypts all Gmail refresh/access tokens with AES-256-GCM, so this key must stay secret. Optionally set `GMAIL_TOKEN_KEY_ID` for rotations.
+7. Set `INTERNAL_API_KEY` (gateway) and `GATEWAY_INTERNAL_SECRET` (brain) so internal service-to-service calls can specify `user_id` without cookies.
 6. Ensure `NEXT_PUBLIC_GATEWAY_URL` points to the gateway root (e.g. `http://localhost:4000`). The frontend will automatically append `/api/...`, so do not include `/api` in the env var.
-7. Start services (in separate terminals):
+8. Start services (in separate terminals):
    - Brain: `cd brain && poetry run uvicorn src.main:app --reload --port 8000`
    - Gateway: `cd gateway && npm run dev`
    - Frontend: `cd frontend && npm run dev`

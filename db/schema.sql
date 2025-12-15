@@ -42,13 +42,16 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation
 CREATE TABLE IF NOT EXISTS gmail_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id),
-    access_token TEXT NOT NULL,
-    refresh_token TEXT NOT NULL,
+    access_token TEXT,
+    refresh_token TEXT,
     expiry TIMESTAMPTZ NOT NULL,
     initial_sync_started_at TIMESTAMPTZ,
     initial_sync_completed_at TIMESTAMPTZ,
     initial_sync_total_threads INTEGER,
     initial_sync_synced_threads INTEGER,
+    access_token_enc JSONB,
+    refresh_token_enc JSONB,
+    token_key_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_gmail_tokens_user_id ON gmail_tokens(user_id);

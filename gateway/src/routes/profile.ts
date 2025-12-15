@@ -45,6 +45,10 @@ router.delete('/account', async (req, res) => {
 });
 
 router.post('/logout', (req, res) => {
+  const userId = getUserId(req);
+  if (!userId) {
+    return res.status(204).end();
+  }
   logoutUser(req, res);
   return res.json({ status: 'signed_out' });
 });
