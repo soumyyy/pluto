@@ -6,6 +6,7 @@ import gmailRouter from './routes/gmail';
 import profileRouter from './routes/profile';
 import memoryRouter from './routes/memory';
 import graphRouter from './routes/graph';
+import internalProfileRouter from './routes/internal/profile';
 import { scheduleGmailJobs } from './jobs/gmailJobs';
 import { attachUserContext } from './middleware/userContext';
 
@@ -45,9 +46,6 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 6. User context
-app.use(attachUserContext);
-
 /**
  * HEALTH CHECKS
  */
@@ -60,7 +58,15 @@ app.get('/health', (_req, res) => {
 });
 
 /**
- * ROUTES
+ * INTERNAL API ROUTES (before user context middleware)
+ */
+app.use('/internal/profile', internalProfileRouter);
+
+// 6. User context (only for frontend API routes)
+app.use(attachUserContext);
+
+/**
+ * FRONTEND API ROUTES (with user context)
  */
 app.use('/api/chat', chatRouter);
 app.use('/api/profile', profileRouter);

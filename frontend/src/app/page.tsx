@@ -58,7 +58,7 @@ export default function ChatPage() {
     setIsSending(true);
 
     try {
-      const response = await post('/api/chat', {
+      const response = await post('chat', {
         message: userMessage.content,
         history: historyPayload
       });

@@ -16,7 +16,7 @@ export function Sidebar() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [isBespokeMemoryModalOpen, setIsBespokeMemoryModalOpen] = useState(false);
   const [localIdentity, setLocalIdentity] = useState<{ name: string }>({ name: '' });
-  const connectUrl = `${GATEWAY_URL}/api/gmail/connect`;
+  const connectUrl = getAbsoluteApiUrl('gmail/connect');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -42,7 +42,7 @@ export function Sidebar() {
       if (disconnecting) return;
       setDisconnecting(true);
       try {
-        const response = await gatewayFetch('/api/gmail/disconnect', {
+        const response = await gatewayFetch('gmail/disconnect', {
           method: 'POST'
         });
         if (!response.ok) throw new Error('Failed to disconnect Gmail');

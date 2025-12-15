@@ -45,8 +45,8 @@ function normalizeProfile(payload: unknown): UserProfile | null {
 
 export async function fetchSessionSnapshot(): Promise<SessionSnapshot> {
   const [gmailResult, profileResult] = await Promise.allSettled([
-    gatewayFetch('/api/gmail/status'),
-    gatewayFetch('/api/profile')
+    gatewayFetch('gmail/status'),
+    gatewayFetch('profile')
   ]);
 
   let gmailPayload: unknown = null;

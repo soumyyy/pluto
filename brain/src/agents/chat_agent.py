@@ -109,7 +109,7 @@ def _build_tools(user_id: str) -> List[Tool]:
         return json.dumps(detail.dict())
 
     async def profile_coro(field: str | None = None, value: str | None = None, note: str | None = None) -> str:
-        return await profile_update_tool(field=field, value=value, note=note)
+        return await profile_update_tool(field=field, value=value, note=note, user_id=user_id)
 
     return [
         Tool(

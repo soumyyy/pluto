@@ -35,7 +35,7 @@ Browser → Gateway (`/api/chat`) → Brain (`/chat`) → tools (memory + Gmail 
    - **Local**: `docker-compose up -d postgres` and apply the schema with `psql $DATABASE_URL -f db/schema.sql`.
    - **Supabase**: create a project, enable the `pgvector` extension, and run `db/supabase-init.sql` from the Supabase SQL editor. Copy the connection string (ensure it ends with `?sslmode=require`) into `DATABASE_URL`.
 5. Set `INTERNAL_API_KEY` (gateway) and `GATEWAY_INTERNAL_SECRET` (brain) so internal service-to-service calls can specify `user_id` without cookies.
-6. (Dev) Leave `NEXT_PUBLIC_GATEWAY_URL` unset so the Next.js dev server proxies `/api` to the gateway; cookies then behave like first-party cookies. If you need to override, set `GATEWAY_PROXY_TARGET`.
+6. Ensure `NEXT_PUBLIC_GATEWAY_URL` points to the gateway root (e.g. `http://localhost:4000`). The frontend will automatically append `/api/...`, so do not include `/api` in the env var.
 7. Start services (in separate terminals):
    - Brain: `cd brain && poetry run uvicorn src.main:app --reload --port 8000`
    - Gateway: `cd gateway && npm run dev`

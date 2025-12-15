@@ -1,109 +1,164 @@
-from copy import deepcopy
-from typing import Any, Dict, Optional
+"""
+Production-ready profile tools using Gateway internal API.
+Provides secure and reliable service-to-service communication.
+"""
+import logging
+from typing import Optional
 
-import httpx
-from ..config import get_settings
-from ..utils.profile import now_iso, normalize_notes, normalize_prev_entries
+from ..services.internal_client import get_internal_client, InternalAPIError
 
-KNOWN_FIELDS = {
-    "full_name": "fullName",
-    "preferred_name": "preferredName",
-    "timezone": "timezone",
-    "contact_email": "contactEmail",
-    "phone": "phone",
-    "company": "company",
-    "role": "role",
-    "preferences": "preferences",
-    "biography": "biography",
-}
+logger = logging.getLogger(__name__)
 
 
-async def _fetch_existing_profile(client: httpx.AsyncClient, base_url: str) -> Optional[Dict[str, Any]]:
+async def profile_update_tool(
+    field: Optional[str] = None, 
+    value: Optional[str] = None, 
+    note: Optional[str] = None,
+    user_id: Optional[str] = None
+) -> str:
+    """
+    Update user profile with field/value pairs or add notes via Gateway internal API.
+    
+    Args:
+        field: Profile field name (e.g., 'full_name', 'company', 'timezone')
+        value: New value for the field
+        note: Free-form note to add to profile
+        user_id: User ID (passed from chat context)
+        
+    Returns:
+        Success/failure message with details
+    """
+    if not user_id:
+        logger.error("[ProfileTool] Profile update attempted without user_id")
+        return "Error: User ID required for profile updates."
+    
     try:
-        response = await client.get(f"{base_url}/api/profile")
-    except httpx.HTTPError:
-        return None
-    if response.status_code >= 400:
-        return None
+        # Validate input
+        if not field and not note:
+            return "No profile changes supplied. Please provide either a field/value pair or a note."
+            
+        if field and not value:
+            return "Field specified but no value provided. Please include both field and value."
+            
+        # Get internal client
+        client = await get_internal_client()
+        
+        # Make the update request
+        result = await client.update_profile(
+            user_id=user_id,
+            field=field,
+            value=value,
+            note=note
+        )
+        
+        # Format success response
+        changes = result.get("changes", [])
+        if changes and changes != ["No changes"]:
+            change_summary = f" Changes: {', '.join(changes[:2])}" + ("..." if len(changes) > 2 else "")
+            return f"Profile updated successfully.{change_summary}"
+        else:
+            return "Profile updated successfully."
+            
+    except InternalAPIError as e:
+        logger.error(f"[ProfileTool] Internal API error for user {user_id}: {e}")
+        if e.status_code == 400:
+            return f"Profile update failed: {e.response_data.get('error', 'Invalid request')}"
+        elif e.status_code == 401:
+            return "Profile update failed: Authentication error."
+        elif e.status_code == 404:
+            return "Profile update failed: User not found."
+        else:
+            return f"Profile update failed: Service error ({e.status_code})"
+    except ValueError as e:
+        logger.warning(f"[ProfileTool] Invalid input for user {user_id}: {e}")
+        return f"Invalid input: {e}"
+    except Exception as e:
+        logger.error(f"[ProfileTool] Unexpected error for user {user_id}: {e}")
+        return "Profile update failed due to an unexpected error. Please try again."
+
+
+async def get_profile_tool(user_id: Optional[str] = None) -> str:
+    """
+    Get user profile information via Gateway internal API.
+    
+    Args:
+        user_id: User ID (passed from chat context)
+        
+    Returns:
+        Formatted profile information or error message
+    """
+    if not user_id:
+        logger.error("[ProfileTool] Profile lookup attempted without user_id") 
+        return "Error: User ID required for profile lookup."
+        
     try:
-        payload = response.json()
-    except ValueError:
-        return None
-    profile = payload.get("profile")
-    if not isinstance(profile, dict):
-        return None
-    return profile
-
-
-async def profile_update_tool(field: str | None = None, value: str | None = None, note: str | None = None) -> str:
-    settings = get_settings()
-    payload: Dict[str, Any] = {}
-
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        existing_profile = await _fetch_existing_profile(client, settings.gateway_url)
-        existing_custom = {}
-        if existing_profile:
-            existing_custom = existing_profile.get("customData") or {}
-        if not isinstance(existing_custom, dict):
-            existing_custom = {}
-        custom_data = deepcopy(existing_custom)
-        custom_modified = False
-
-        def mark_custom_modified():
-            nonlocal custom_modified
-            if not custom_modified:
-                custom_modified = True
-
-        def record_previous_value(field_key: str, previous_value: Any):
-            if previous_value is None:
-                return
-            prev_values = custom_data.get("previousValues")
-            if not isinstance(prev_values, dict):
-                prev_values = {}
-            entries = normalize_prev_entries(prev_values.get(field_key))
-            entries.append({
-                "value": previous_value,
-                "timestamp": now_iso()
-            })
-            prev_values[field_key] = entries
-            custom_data["previousValues"] = prev_values
-            mark_custom_modified()
-
-        if field and value is not None:
-            matched_api_field = None
-            for db_field, api_field in KNOWN_FIELDS.items():
-                if field.lower() in {db_field, api_field.lower()}:
-                    matched_api_field = api_field
-                    break
-
-            if matched_api_field:
-                payload[matched_api_field] = value
-                existing_value = existing_profile.get(matched_api_field) if existing_profile else None
-                if existing_value != value:
-                    record_previous_value(matched_api_field, existing_value)
-            else:
-                existing_value = custom_data.get(field)
-                if existing_value != value:
-                    custom_data[field] = value
-                    mark_custom_modified()
-                    record_previous_value(field, existing_value)
-
-        if note:
-            normalized_notes = normalize_notes(custom_data.get("notes"))
-            normalized_notes.append({
-                "text": note,
-                "timestamp": now_iso()
-            })
-            custom_data["notes"] = normalized_notes
-            mark_custom_modified()
-
-        if custom_modified:
-            payload["customData"] = custom_data
-
-        if not payload:
-            return "No profile changes supplied."
-
-        response = await client.post(f"{settings.gateway_url}/api/profile", json=payload)
-    if response.status_code >= 400:
-        raise RuntimeError(f"Profile update failed: {response.text}")
-    return "Profile updated."
+        # Get internal client
+        client = await get_internal_client()
+        
+        # Fetch profile
+        profile = await client.get_profile(user_id)
+        
+        if not profile:
+            return "No profile found for this user."
+            
+        # Format profile information
+        info_parts = []
+        
+        # Add basic information
+        if profile.get("fullName"):
+            info_parts.append(f"Name: {profile['fullName']}")
+        elif profile.get("preferredName"):
+            info_parts.append(f"Name: {profile['preferredName']}")
+            
+        if profile.get("company"):
+            info_parts.append(f"Company: {profile['company']}")
+            
+        if profile.get("role"):
+            info_parts.append(f"Role: {profile['role']}")
+            
+        if profile.get("contactEmail"):
+            info_parts.append(f"Email: {profile['contactEmail']}")
+            
+        if profile.get("timezone"):
+            info_parts.append(f"Timezone: {profile['timezone']}")
+        
+        # Add recent notes from custom data
+        custom_data = profile.get("customData", {})
+        if custom_data and custom_data.get("notes"):
+            recent_notes = custom_data["notes"][-3:]  # Last 3 notes
+            if recent_notes:
+                notes_text = []
+                for note in recent_notes:
+                    if isinstance(note, dict) and note.get("text"):
+                        notes_text.append(note["text"])
+                    elif isinstance(note, str):
+                        notes_text.append(note)
+                
+                if notes_text:
+                    info_parts.append(f"Recent notes: {'; '.join(notes_text)}")
+        
+        # Add last updated info
+        if profile.get("updatedAt"):
+            try:
+                from datetime import datetime
+                updated = datetime.fromisoformat(profile["updatedAt"].replace('Z', '+00:00'))
+                info_parts.append(f"Last updated: {updated.strftime('%Y-%m-%d')}")
+            except Exception:
+                pass  # Skip if date parsing fails
+                
+        if info_parts:
+            return "Profile: " + "; ".join(info_parts)
+        else:
+            return "Profile exists but no details are available."
+        
+    except InternalAPIError as e:
+        logger.error(f"[ProfileTool] Internal API error for user {user_id}: {e}")
+        if e.status_code == 404:
+            return "No profile found for this user."
+        elif e.status_code == 401:
+            return "Failed to get profile: Authentication error."
+        else:
+            return f"Failed to get profile: Service error ({e.status_code})"
+    except Exception as e:
+        logger.error(f"[ProfileTool] Unexpected error for user {user_id}: {e}")
+        return "Failed to get profile due to an unexpected error."

@@ -138,7 +138,7 @@ export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActio
       editableKeys.forEach((key) => {
         payload[key] = profileDraft[key] ?? '';
       });
-      const response = await gatewayFetch('/api/profile', {
+      const response = await gatewayFetch('profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -187,7 +187,7 @@ export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActio
     setIsSubmitting(true);
     setError(null);
     try {
-      const response = await gatewayFetch('/api/profile', {
+      const response = await gatewayFetch('profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -245,7 +245,7 @@ export function ProfileModal({ onGmailAction, onOpenBespoke, onClose, gmailActio
     setIsDeletingAccount(true);
     setDeleteError(null);
     try {
-      const response = await gatewayFetch('/api/profile/account', {
+      const response = await gatewayFetch('profile/account', {
         method: 'DELETE'
       });
       if (!response.ok) {

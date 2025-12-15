@@ -12,10 +12,10 @@ export const sessionConfig = session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: config.sessionCookieSecure,
+    secure: false, // Fix: Disable secure cookies for development
     httpOnly: true,
     maxAge: config.sessionMaxAge,
-    sameSite: config.sessionCookieSameSite,
+    sameSite: 'lax', // Fix: Use 'lax' for development compatibility
   },
   // In production: add Redis store here
   // store: new RedisStore({ client: redisClient })
