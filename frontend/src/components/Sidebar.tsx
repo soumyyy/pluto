@@ -8,8 +8,7 @@ import { useSessionContext } from '@/components/SessionProvider';
 import type { GmailStatus } from '@/lib/session';
 import type { UserProfile } from '@/lib/profile';
 import { gatewayFetch } from '@/lib/gatewayFetch';
-
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+import { getAbsoluteApiUrl } from '@/lib/api';
 
 export function Sidebar() {
   const { session, refreshSession, updateGmailStatus } = useSessionContext();

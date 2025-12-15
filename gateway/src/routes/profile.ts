@@ -36,7 +36,7 @@ router.post('/', async (req, res) => {
 router.delete('/account', async (req, res) => {
   const userId = requireUserId(req);
   try {
-    await deleteAccount(userId, res);
+    await deleteAccount(userId, req, res);
     return res.json({ status: 'deleted' });
   } catch (error) {
     console.error('Failed to delete account', error);

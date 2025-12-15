@@ -8,8 +8,7 @@ import { VideoBackground } from '@/components/login/VideoBackground';
 import { useSessionContext } from '@/components/SessionProvider';
 import { hasActiveSession } from '@/lib/session';
 import { gatewayFetch } from '@/lib/gatewayFetch';
-
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:4000';
+import { getAbsoluteApiUrl } from '@/lib/api';
 
 const QUESTIONS: OnboardingQuestion[] = [
   {
@@ -64,7 +63,7 @@ export default function LoginPage() {
     setAuthLoading(true);
     try {
       popupRef.current = window.open(
-        `${GATEWAY_URL}/api/gmail/connect?state=Eclipsn`,
+        `${getAbsoluteApiUrl('gmail/connect')}?state=Eclipsn`,
         'gmailOAuth',
         'width=520,height=640'
       );
@@ -130,7 +129,7 @@ export default function LoginPage() {
         };
       }
       if (Object.keys(payload).length > 0) {
-        await gatewayFetch('/api/profile', {
+        await gatewayFetch('profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)

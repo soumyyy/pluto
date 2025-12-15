@@ -1,16 +1,60 @@
-const BASE_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || '';
+import { getApiUrl } from './api';
 
-export function gatewayFetch(path: string, init: RequestInit = {}) {
-  const url = BASE_URL ? `${BASE_URL}${path}` : path;
-  const headers =
-    init.headers instanceof Headers
-      ? init.headers
-      : init.headers
-      ? new Headers(init.headers as Record<string, string>)
-      : new Headers();
-  return fetch(url, {
-    ...init,
+/**
+ * Simple fetch wrapper using Next.js environment configuration
+ * No custom URL logic - let Next.js handle routing
+ */
+
+interface GatewayFetchOptions extends RequestInit {
+  timeout?: number;
+}
+
+/**
+ * Fetch wrapper that uses Next.js standard API configuration
+ */
+export function gatewayFetch(path: string, options: GatewayFetchOptions = {}): Promise<Response> {
+  const { timeout = 10000, ...fetchOptions } = options;
+  
+  // Use Next.js API configuration - no custom logic needed
+  const url = getApiUrl(path);
+  
+  // Prepare headers
+  const headers = new Headers(fetchOptions.headers || {});
+  headers.set('Accept', 'application/json');
+  
+  if (['POST', 'PUT', 'PATCH'].includes(fetchOptions.method?.toUpperCase() || 'GET')) {
+    if (!headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+  }
+  
+  // Simple timeout using AbortController
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
+  const finalOptions: RequestInit = {
+    ...fetchOptions,
     headers,
-    credentials: 'include'
+    credentials: 'include',
+    signal: controller.signal
+  };
+  
+  return fetch(url, finalOptions).finally(() => {
+    clearTimeout(timeoutId);
+  });
+}
+
+/**
+ * Convenience wrappers
+ */
+export function gatewayGet(path: string, options: Omit<GatewayFetchOptions, 'method'> = {}) {
+  return gatewayFetch(path, { ...options, method: 'GET' });
+}
+
+export function gatewayPost(path: string, data?: any, options: Omit<GatewayFetchOptions, 'method' | 'body'> = {}) {
+  return gatewayFetch(path, {
+    ...options,
+    method: 'POST',
+    body: data ? JSON.stringify(data) : undefined
   });
 }

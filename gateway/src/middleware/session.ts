@@ -1,0 +1,39 @@
+import session from 'express-session';
+import { config } from '../config';
+
+/**
+ * Production session management using express-session
+ * Replaces 200+ lines of custom JWT code with proven solution
+ */
+
+export const sessionConfig = session({
+  name: config.sessionCookieName,
+  secret: config.sessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: config.sessionCookieSecure,
+    httpOnly: true,
+    maxAge: config.sessionMaxAge,
+    sameSite: config.sessionCookieSameSite,
+  },
+  // In production: add Redis store here
+  // store: new RedisStore({ client: redisClient })
+});
+
+/**
+ * Simple session helpers - no complex fingerprinting needed
+ */
+export const sessionHelpers = {
+  setUserId: (req: any, userId: string) => {
+    req.session.userId = userId;
+  },
+  
+  getUserId: (req: any): string | undefined => {
+    return req.session?.userId;
+  },
+  
+  destroySession: (req: any, callback?: (err?: any) => void) => {
+    req.session.destroy(callback || (() => {}));
+  },
+};
