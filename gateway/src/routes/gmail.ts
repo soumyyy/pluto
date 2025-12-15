@@ -16,6 +16,8 @@ import { ensureInitialGmailSync, formatGmailDate } from '../jobs/gmailInitialSyn
 import { getGmailSyncMetadata } from '../services/db';
 import { config } from '../config';
 import { attachGmailIdentity, establishSession, ensureSessionUser } from '../services/userService';
+import { generatePopupResponse } from '../utils/popupResponse';
+import { db } from '../services/db';
 
 const router = Router();
 const DEFAULT_LOOKBACK_HOURS = 48;
@@ -39,8 +41,7 @@ router.get('/callback', async (req, res) => {
   // Handle OAuth errors
   if (oauthError) {
     console.error('[Gmail OAuth] OAuth error:', oauthError, error_description);
-    const redirectUrl = `${config.frontendOrigin}/auth/callback?success=false&error=${encodeURIComponent(String(oauthError))}`;
-    return res.redirect(redirectUrl);
+    return res.redirect(`${config.frontendOrigin}/login?error=${encodeURIComponent(String(oauthError))}`);
   }
   
   if (!code || typeof code !== 'string') {
@@ -115,11 +116,29 @@ router.get('/callback', async (req, res) => {
       console.error('[Gmail OAuth] Failed to run initial Gmail sync:', err);
     });
 
-    // Simple redirect validation
-    const successRedirect = `${config.frontendOrigin}/auth/callback?success=true`;
-
     console.log('[Gmail OAuth] Successfully connected Gmail for user:', userId);
-    return res.redirect(successRedirect);
+    
+    // Check if user needs onboarding or can go directly to main app
+    try {
+      const { rows } = await db.query(
+        'SELECT full_name, preferred_name FROM user_profiles WHERE user_id = $1',
+        [userId]
+      );
+      
+      if (rows.length > 0 && rows[0].full_name) {
+        // User has profile → redirect to main app
+        console.log('[Gmail OAuth] User has profile, redirecting to main app');
+        return res.redirect(`${config.frontendOrigin}/`);
+      } else {
+        // User needs onboarding
+        console.log('[Gmail OAuth] User needs onboarding, redirecting to onboarding');
+        return res.redirect(`${config.frontendOrigin}/login?stage=onboarding`);
+      }
+    } catch (error) {
+      console.error('[Gmail OAuth] Error checking user profile:', error);
+      // Fallback to onboarding if we can't determine profile status
+      return res.redirect(`${config.frontendOrigin}/login?stage=onboarding`);
+    }
     
   } catch (error) {
     console.error('[Gmail OAuth] Callback error:', error);
@@ -131,8 +150,8 @@ router.get('/callback', async (req, res) => {
       // Ignore cleanup errors
     }
     
-    const errorRedirect = `${config.frontendOrigin}/auth/callback?success=false&error=${encodeURIComponent('oauth_failed')}`;
-    return res.redirect(errorRedirect);
+    // Redirect back to login page on error
+    return res.redirect(`${config.frontendOrigin}/login?error=oauth_failed`);
   }
 });
 

@@ -2,7 +2,7 @@
  * Internal API routes for profile operations.
  * Provides secure service-to-service profile management.
  */
-import { Router } from 'express';
+import { Router, type Response } from 'express';
 import { 
   validateInternalAuth, 
   requireInternalUser, 

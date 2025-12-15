@@ -37,8 +37,10 @@ export default function LoginPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [completing, setCompleting] = useState(false);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
-  const popupRef = useRef<Window | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(() => {
+    const error = searchParams.get('error');
+    return error ? `Authentication failed: ${error}` : null;
+  });
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -51,51 +53,14 @@ export default function LoginPage() {
     }
   }, [router, session, sessionLoading]);
 
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-      if (popupRef.current && !popupRef.current.closed) popupRef.current.close();
-    };
-  }, []);
 
   const handleGoogleSignIn = useCallback(() => {
     if (typeof window === 'undefined') return;
+    
+    // Simple linear flow: redirect current window to OAuth
     setAuthLoading(true);
-    try {
-      popupRef.current = window.open(
-        `${getAbsoluteApiUrl('gmail/connect')}?state=Eclipsn`,
-        'gmailOAuth',
-        'width=520,height=640'
-      );
-    } catch (error) {
-      console.error('Failed to open Gmail auth window', error);
-      setAuthLoading(false);
-      return;
-    }
-    pollRef.current = setInterval(async () => {
-      try {
-        const snapshot = await refreshSession();
-        if (snapshot?.gmail.connected) {
-          if (pollRef.current) {
-            clearInterval(pollRef.current);
-            pollRef.current = null;
-          }
-          if (popupRef.current && !popupRef.current.closed) {
-            popupRef.current.close();
-          }
-          if (snapshot.profile) {
-            // Force a page refresh to ensure cookies are loaded
-            window.location.href = '/';
-          } else {
-            setStage('onboarding');
-          }
-          setAuthLoading(false);
-        }
-      } catch {
-        // swallow
-      }
-    }, 2500);
-  }, [refreshSession, router]);
+    window.location.href = `${getAbsoluteApiUrl('gmail/connect')}?state=Eclipsn`;
+  }, []);
 
   const handleResponseChange = useCallback((id: string, value: string) => {
     setResponses((prev) => ({ ...prev, [id]: value }));
@@ -174,6 +139,11 @@ export default function LoginPage() {
             <>
               <p className="login-kicker">ECLIPSN</p>
               <h1>Connect with your orbit.</h1>
+              {errorMessage && (
+                <p style={{ color: '#ff6b6b', marginBottom: '1rem' }}>
+                  {errorMessage}
+                </p>
+              )}
               <GoogleSignInButton onClick={handleGoogleSignIn} loading={authLoading} />
               <p className="login-footnote">Privacy-first</p>
             </>

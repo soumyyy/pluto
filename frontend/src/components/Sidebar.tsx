@@ -57,17 +57,8 @@ export function Sidebar() {
         setDisconnecting(false);
       }
     } else {
-      window.open(connectUrl, '_blank', 'width=520,height=620');
-      const poll = setInterval(async () => {
-        try {
-          const snapshot = await refreshSession();
-          if (snapshot?.gmail.connected) {
-            clearInterval(poll);
-          }
-        } catch {
-          // swallow
-        }
-      }, 2500);
+      // Linear OAuth flow: redirect current window to OAuth
+      window.location.href = connectUrl;
     }
   }
 
